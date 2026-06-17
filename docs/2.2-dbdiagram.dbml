@@ -1,0 +1,380 @@
+// BookMyTurf — dbdiagram.io Schema
+// Paste this at https://dbdiagram.io/d to visualize
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+Enum UserRole {
+  SUPER_ADMIN
+  TURF_OWNER
+  TURF_MANAGER
+  TURF_STAFF
+  CUSTOMER
+}
+
+Enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+  EXPIRED
+}
+
+Enum BookingSource {
+  ONLINE
+  WALK_IN
+  PHONE
+}
+
+Enum PaymentStatus {
+  PENDING
+  AUTHORIZED
+  CAPTURED
+  REFUNDED
+  PARTIALLY_REFUNDED
+  FAILED
+}
+
+Enum SlotStatus {
+  AVAILABLE
+  BOOKED
+  BLOCKED
+  MAINTENANCE
+}
+
+Enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+  TRIAL
+}
+
+Enum CancellationPolicyType {
+  FLEXIBLE
+  MODERATE
+  STRICT
+  CUSTOM
+}
+
+Enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+// ─────────────────────────────────────────────
+// TABLES
+// ─────────────────────────────────────────────
+
+Table tenants {
+  id varchar [pk]
+  name varchar [not null]
+  slug varchar [unique, not null]
+  email varchar [not null]
+  phone varchar [not null]
+  logo varchar
+  address varchar
+  city varchar
+  state varchar
+  pincode varchar
+  latitude float
+  longitude float
+  is_active boolean [default: true]
+  onboarding_complete boolean [default: false]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp
+}
+
+Table users {
+  id varchar [pk]
+  tenant_id varchar [ref: > tenants.id]
+  phone varchar [unique]
+  email varchar [unique]
+  first_name varchar [not null]
+  last_name varchar
+  avatar varchar
+  role UserRole [default: 'CUSTOMER']
+  gender varchar
+  is_active boolean [default: true]
+  email_verified boolean [default: false]
+  phone_verified boolean [default: false]
+  google_id varchar [unique]
+  refresh_token varchar
+  last_login_at timestamp
+  created_at timestamp [default: `now()`]
+  updated_at timestamp
+
+  indexes {
+    tenant_id
+    role
+    phone
+    email
+  }
+}
+
+Table otps {
+  id varchar [pk]
+  phone varchar [not null]
+  code varchar [not null]
+  expires_at timestamp [not null]
+  verified boolean [default: false]
+  attempts int [default: 0]
+  created_at timestamp [default: `now()`]
+
+  indexes {
+    (phone, code)
+  }
+}
+
+Table venues {
+  id varchar [pk]
+  tenant_id varchar [ref: > tenants.id, not null]
+  name varchar [not null]
+  address varchar [not null]
+  city varchar [not null]
+  state varchar [not null]
+  pincode varchar [not null]
+  latitude float
+  longitude float
+  phone varchar
+  open_time varchar [not null]
+  close_time varchar [not null]
+  is_active boolean [default: true]
+  amenities json
+  images json
+  created_at timestamp [default: `now()`]
+  updated_at timestamp
+
+  indexes {
+    tenant_id
+    city
+  }
+}
+
+Table courts {
+  id varchar [pk]
+  venue_id varchar [ref: > venues.id, not null]
+  name varchar [not null]
+  description varchar
+  is_indoor boolean [default: false]
+  surface_type varchar
+  dimensions varchar
+  max_players int
+  images json
+  is_active boolean [default: true]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp
+
+  indexes {
+    venue_id
+  }
+}
+
+Table sports {
+  id varchar [pk]
+  name varchar [unique, not null]
+  icon varchar
+  is_active boolean [default: true]
+  created_at timestamp [default: `now()`]
+}
+
+Table court_sports {
+  id varchar [pk]
+  court_id varchar [ref: > courts.id, not null]
+  sport_id varchar [ref: > sports.id, not null]
+  base_slot_minutes int [default: 60]
+  price_per_slot decimal [not null]
+  peak_price_per_slot decimal
+  max_consecutive_slots int [default: 4]
+  is_active boolean [default: true]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp
+
+  indexes {
+    court_id
+    sport_id
+    (court_id, sport_id) [unique]
+  }
+}
+
+Table slot_configs {
+  id varchar [pk]
+  court_sport_id varchar [ref: > court_sports.id, not null]
+  day_of_week DayOfWeek [not null]
+  start_time varchar [not null]
+  end_time varchar [not null]
+  is_peak_hour boolean [default: false]
+  is_active boolean [default: true]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp
+
+  indexes {
+    (court_sport_id, day_of_week)
+  }
+}
+
+Table bookings {
+  id varchar [pk]
+  tenant_id varchar [not null]
+  court_sport_id varchar [ref: > court_sports.id, not null]
+  customer_id varchar [ref: > users.id, not null]
+  booking_date date [not null]
+  total_amount decimal [not null]
+  discount_amount decimal [default: 0]
+  final_amount decimal [not null]
+  status BookingStatus [default: 'PENDING']
+  source BookingSource [default: 'ONLINE']
+  held_until timestamp
+  paid_at timestamp
+  paid_offline boolean [default: false]
+  notes varchar
+  cancelled_at timestamp
+  cancelled_by varchar
+  cancellation_reason varchar
+  refund_amount decimal
+  created_at timestamp [default: `now()`]
+  updated_at timestamp
+
+  indexes {
+    tenant_id
+    customer_id
+    court_sport_id
+    booking_date
+    status
+    (tenant_id, booking_date)
+  }
+}
+
+Table booking_slots {
+  id varchar [pk]
+  booking_id varchar [ref: > bookings.id, not null]
+  start_time varchar [not null]
+  end_time varchar [not null]
+  status SlotStatus [default: 'BOOKED']
+  created_at timestamp [default: `now()`]
+
+  indexes {
+    booking_id
+  }
+}
+
+Table payments {
+  id varchar [pk]
+  booking_id varchar [ref: - bookings.id, unique, not null]
+  tenant_id varchar [not null]
+  amount decimal [not null]
+  currency varchar [default: 'INR']
+  status PaymentStatus [default: 'PENDING']
+  razorpay_order_id varchar [unique]
+  razorpay_payment_id varchar [unique]
+  razorpay_signature varchar
+  razorpay_refund_id varchar
+  platform_fee decimal
+  tenant_payout decimal
+  payment_method varchar
+  refund_amount decimal
+  refunded_at timestamp
+  paid_at timestamp
+  failure_reason varchar
+  created_at timestamp [default: `now()`]
+  updated_at timestamp
+
+  indexes {
+    tenant_id
+    razorpay_order_id
+    razorpay_payment_id
+    status
+  }
+}
+
+Table plans {
+  id varchar [pk]
+  name varchar [not null]
+  description varchar
+  monthly_price decimal [not null]
+  annual_price decimal [not null]
+  commission_rate decimal [not null]
+  max_venues int [default: 1]
+  max_courts int [default: 3]
+  max_staff int [default: 5]
+  features json
+  is_active boolean [default: true]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp
+}
+
+Table subscriptions {
+  id varchar [pk]
+  tenant_id varchar [ref: - tenants.id, unique, not null]
+  plan_id varchar [ref: > plans.id, not null]
+  status SubscriptionStatus [default: 'TRIAL']
+  current_period_start timestamp [not null]
+  current_period_end timestamp [not null]
+  trial_ends_at timestamp
+  razorpay_subscription_id varchar [unique]
+  cancelled_at timestamp
+  created_at timestamp [default: `now()`]
+  updated_at timestamp
+
+  indexes {
+    tenant_id
+    status
+  }
+}
+
+Table cancellation_policies {
+  id varchar [pk]
+  tenant_id varchar [ref: - tenants.id, unique, not null]
+  policy_type CancellationPolicyType [default: 'MODERATE']
+  custom_rules json
+  created_at timestamp [default: `now()`]
+  updated_at timestamp
+}
+
+Table notifications {
+  id varchar [pk]
+  tenant_id varchar [ref: > tenants.id]
+  user_id varchar [ref: > users.id, not null]
+  type varchar [not null]
+  channel varchar [not null]
+  title varchar [not null]
+  body varchar [not null]
+  metadata json
+  sent_at timestamp
+  is_read boolean [default: false]
+  created_at timestamp [default: `now()`]
+
+  indexes {
+    tenant_id
+    user_id
+    type
+  }
+}
+
+Table audit_logs {
+  id varchar [pk]
+  tenant_id varchar
+  user_id varchar [not null]
+  action varchar [not null]
+  entity varchar [not null]
+  entity_id varchar [not null]
+  old_value json
+  new_value json
+  ip_address varchar
+  user_agent varchar
+  created_at timestamp [default: `now()`]
+
+  indexes {
+    tenant_id
+    user_id
+    (entity, entity_id)
+    created_at
+  }
+}

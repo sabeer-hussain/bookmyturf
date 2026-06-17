@@ -1,0 +1,79 @@
+// BookMyTurf — Architecture Diagram
+// Paste this at https://app.eraser.io/workspace/new?template=cloud-architecture
+// Or use https://draw.io and import as text
+
+// ─────────────────────────────────────────────
+// HIGH-LEVEL SYSTEM ARCHITECTURE (Eraser.io format)
+// ─────────────────────────────────────────────
+
+// Paste below content at eraser.io (Cloud Architecture Diagram)
+
+Customers [icon: users, color: blue] {
+  Mobile PWA [icon: smartphone]
+  Desktop Browser [icon: monitor]
+}
+
+AWS Cloud [icon: aws, color: orange] {
+  AWS Amplify [icon: aws-amplify, label: "Next.js Frontend"] {
+    Public Pages [icon: globe, label: "/[tenant-slug]/*"]
+    Dashboard [icon: layout, label: "/dashboard/*"]
+    Admin Panel [icon: shield, label: "/admin/*"]
+  }
+
+  AWS App Runner [icon: aws-app-runner, label: "NestJS Backend"] {
+    Middleware [icon: layers, label: "Helmet, CORS, Rate Limit, Tenant Resolver"]
+    Auth [icon: lock, label: "JWT + OTP + Google OAuth"]
+    Modules [icon: package, label: "Bookings, Payments, Slots, Analytics, Notifications"]
+    Scheduler [icon: clock, label: "Cron: Hold Expiry, Reminders, Trial Expiry"]
+    Prisma [icon: database, label: "ORM + Tenant Middleware"]
+  }
+
+  AWS RDS [icon: aws-rds, label: "PostgreSQL", color: blue] {
+    Tenants Data [icon: table]
+    Bookings & Payments [icon: table]
+    Slot Configs [icon: table]
+  }
+
+  ElastiCache [icon: aws-elasticache, label: "Redis", color: red] {
+    Session Cache [icon: zap]
+    OTP Store [icon: key]
+    Rate Limit Counters [icon: shield]
+  }
+
+  S3 [icon: aws-s3, label: "Assets Bucket", color: green] {
+    Venue Images [icon: image]
+    Court Photos [icon: image]
+    Tenant Logos [icon: image]
+  }
+
+  CloudWatch [icon: aws-cloudwatch, label: "Logs & Alarms"]
+  Secrets Manager [icon: aws-secrets-manager, label: "Env Secrets"]
+  ACM [icon: aws-certificate-manager, label: "SSL Certificates"]
+}
+
+External Services [icon: cloud, color: purple] {
+  Razorpay [icon: credit-card, label: "Payments + Subscriptions + Refunds"]
+  WhatsApp API [icon: message-circle, label: "Booking Notifications"]
+  Resend [icon: mail, label: "Email Receipts & Reports"]
+  Sentry [icon: alert-triangle, label: "Error Tracking"]
+  Google OAuth [icon: key, label: "Social Login"]
+}
+
+// ─────────────────────────────────────────────
+// CONNECTIONS
+// ─────────────────────────────────────────────
+
+Customers > AWS Amplify: HTTPS
+AWS Amplify > AWS App Runner: REST API (HTTPS)
+AWS App Runner > AWS RDS: Prisma (TCP 5432)
+AWS App Runner > ElastiCache: Redis (TCP 6379)
+AWS App Runner > S3: Presigned URLs
+AWS App Runner > Razorpay: Payment API
+AWS App Runner > WhatsApp API: Send Notifications
+AWS App Runner > Resend: Send Emails
+AWS App Runner > Sentry: Error Reports
+AWS App Runner > CloudWatch: Logs
+AWS App Runner > Secrets Manager: Load Env Vars
+AWS Amplify > ACM: SSL
+Customers > Google OAuth: Social Login
+Razorpay > AWS App Runner: Webhooks (payment.captured, refund.processed)
