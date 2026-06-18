@@ -1,0 +1,63 @@
+export enum UserRole {
+  SUPER_ADMIN = 'SUPER_ADMIN',
+  TURF_OWNER = 'TURF_OWNER',
+  TURF_MANAGER = 'TURF_MANAGER',
+  TURF_STAFF = 'TURF_STAFF',
+  CUSTOMER = 'CUSTOMER',
+}
+
+export enum BookingStatus {
+  PENDING = 'PENDING',
+  CONFIRMED = 'CONFIRMED',
+  CANCELLED = 'CANCELLED',
+  COMPLETED = 'COMPLETED',
+  NO_SHOW = 'NO_SHOW',
+  EXPIRED = 'EXPIRED',
+}
+
+export enum BookingSource {
+  ONLINE = 'ONLINE',
+  WALK_IN = 'WALK_IN',
+  PHONE = 'PHONE',
+}
+
+export enum PaymentStatus {
+  PENDING = 'PENDING',
+  AUTHORIZED = 'AUTHORIZED',
+  CAPTURED = 'CAPTURED',
+  REFUNDED = 'REFUNDED',
+  PARTIALLY_REFUNDED = 'PARTIALLY_REFUNDED',
+  FAILED = 'FAILED',
+}
+
+export enum SlotStatus {
+  AVAILABLE = 'AVAILABLE',
+  BOOKED = 'BOOKED',
+  BLOCKED = 'BLOCKED',
+  MAINTENANCE = 'MAINTENANCE',
+}
+
+export enum SubscriptionStatus {
+  ACTIVE = 'ACTIVE',
+  PAST_DUE = 'PAST_DUE',
+  CANCELLED = 'CANCELLED',
+  EXPIRED = 'EXPIRED',
+  TRIAL = 'TRIAL',
+}
+
+export enum CancellationPolicyType {
+  FLEXIBLE = 'FLEXIBLE',
+  MODERATE = 'MODERATE',
+  STRICT = 'STRICT',
+  CUSTOM = 'CUSTOM',
+}
+
+export enum DayOfWeek {
+  MONDAY = 'MONDAY',
+  TUESDAY = 'TUESDAY',
+  WEDNESDAY = 'WEDNESDAY',
+  THURSDAY = 'THURSDAY',
+  FRIDAY = 'FRIDAY',
+  SATURDAY = 'SATURDAY',
+  SUNDAY = 'SUNDAY',
+}

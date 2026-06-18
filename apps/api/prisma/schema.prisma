@@ -1,0 +1,445 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum UserRole {
+  SUPER_ADMIN
+  TURF_OWNER
+  TURF_MANAGER
+  TURF_STAFF
+  CUSTOMER
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+  EXPIRED
+}
+
+enum BookingSource {
+  ONLINE
+  WALK_IN
+  PHONE
+}
+
+enum PaymentStatus {
+  PENDING
+  AUTHORIZED
+  CAPTURED
+  REFUNDED
+  PARTIALLY_REFUNDED
+  FAILED
+}
+
+enum SlotStatus {
+  AVAILABLE
+  BOOKED
+  BLOCKED
+  MAINTENANCE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+  TRIAL
+}
+
+enum CancellationPolicyType {
+  FLEXIBLE
+  MODERATE
+  STRICT
+  CUSTOM
+}
+
+enum NotificationType {
+  BOOKING_CONFIRMED
+  BOOKING_CANCELLED
+  BOOKING_REMINDER
+  PAYMENT_RECEIVED
+  PAYMENT_REFUNDED
+}
+
+enum NotificationChannel {
+  WHATSAPP
+  EMAIL
+}
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+// ─────────────────────────────────────────────
+// MODELS
+// ─────────────────────────────────────────────
+
+model Tenant {
+  id                 String              @id @default(cuid())
+  name               String
+  slug               String              @unique
+  email              String
+  phone              String
+  logo               String?
+  address            String?
+  city               String?
+  state              String?
+  pincode            String?
+  latitude           Float?
+  longitude          Float?
+  isActive           Boolean             @default(true)
+  onboardingComplete Boolean             @default(false)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  venues             Venue[]
+  users              User[]
+  subscription       Subscription?
+  cancellationPolicy CancellationPolicy?
+  notifications      Notification[]
+
+  @@map("tenants")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  tenantId      String?
+  phone         String?   @unique
+  email         String?   @unique
+  firstName     String
+  lastName      String?
+  avatar        String?
+  role          UserRole  @default(CUSTOMER)
+  gender        Gender?
+  isActive      Boolean   @default(true)
+  emailVerified Boolean   @default(false)
+  phoneVerified Boolean   @default(false)
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  googleId      String?   @unique
+  refreshToken  String?
+
+  tenant        Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  bookings      Booking[]
+  notifications Notification[]
+
+  @@index([tenantId])
+  @@index([role])
+  @@index([phone])
+  @@index([email])
+  @@map("users")
+}
+
+model Otp {
+  id        String   @id @default(cuid())
+  phone     String
+  code      String
+  expiresAt DateTime
+  verified  Boolean  @default(false)
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([phone, code])
+  @@map("otps")
+}
+
+model Venue {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  address     String
+  city        String
+  state       String
+  pincode     String
+  latitude    Float?
+  longitude   Float?
+  phone       String?
+  openTime    String
+  closeTime   String
+  isActive    Boolean  @default(true)
+  amenities   Json?
+  images      Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  courts      Court[]
+
+  @@index([tenantId])
+  @@index([city])
+  @@map("venues")
+}
+
+model Court {
+  id            String       @id @default(cuid())
+  venueId       String
+  name          String
+  description   String?
+  isIndoor      Boolean      @default(false)
+  surfaceType   String?
+  dimensions    String?
+  maxPlayers    Int?
+  images        Json?
+  isActive      Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  venue         Venue        @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  courtSports   CourtSport[]
+
+  @@index([venueId])
+  @@map("courts")
+}
+
+model CourtSport {
+  id              String       @id @default(cuid())
+  courtId         String
+  sportId         String
+  baseSlotMinutes Int          @default(60)
+  pricePerSlot    Decimal      @db.Decimal(10, 2)
+  peakPricePerSlot Decimal?   @db.Decimal(10, 2)
+  maxConsecutiveSlots Int      @default(4)
+  isActive        Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  court           Court        @relation(fields: [courtId], references: [id], onDelete: Cascade)
+  sport           Sport        @relation(fields: [sportId], references: [id])
+  slotConfigs     SlotConfig[]
+  bookings        Booking[]
+
+  @@unique([courtId, sportId])
+  @@index([courtId])
+  @@index([sportId])
+  @@map("court_sports")
+}
+
+model Sport {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  icon        String?
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+
+  courtSports CourtSport[]
+
+  @@map("sports")
+}
+
+model SlotConfig {
+  id            String    @id @default(cuid())
+  courtSportId  String
+  dayOfWeek     DayOfWeek
+  startTime     String
+  endTime       String
+  isPeakHour    Boolean   @default(false)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  courtSport    CourtSport @relation(fields: [courtSportId], references: [id], onDelete: Cascade)
+
+  @@index([courtSportId, dayOfWeek])
+  @@map("slot_configs")
+}
+
+model Booking {
+  id                 String        @id @default(cuid())
+  tenantId           String
+  courtSportId       String
+  customerId         String
+  bookingDate        DateTime      @db.Date
+  totalAmount        Decimal       @db.Decimal(10, 2)
+  discountAmount     Decimal       @default(0) @db.Decimal(10, 2)
+  finalAmount        Decimal       @db.Decimal(10, 2)
+  status             BookingStatus @default(PENDING)
+  source             BookingSource @default(ONLINE)
+  heldUntil          DateTime?
+  paidAt             DateTime?
+  paidOffline        Boolean       @default(false)
+  notes              String?
+  cancelledAt        DateTime?
+  cancelledBy        String?
+  cancellationReason String?
+  refundAmount       Decimal?      @db.Decimal(10, 2)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  courtSport         CourtSport    @relation(fields: [courtSportId], references: [id])
+  customer           User          @relation(fields: [customerId], references: [id])
+  bookingSlots       BookingSlot[]
+  payment            Payment?
+
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([courtSportId])
+  @@index([bookingDate])
+  @@index([status])
+  @@index([tenantId, bookingDate])
+  @@map("bookings")
+}
+
+model BookingSlot {
+  id          String     @id @default(cuid())
+  bookingId   String
+  startTime   String
+  endTime     String
+  status      SlotStatus @default(BOOKED)
+  createdAt   DateTime   @default(now())
+
+  booking     Booking    @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
+  @@map("booking_slots")
+}
+
+model Payment {
+  id                  String        @id @default(cuid())
+  bookingId           String        @unique
+  tenantId            String
+  amount              Decimal       @db.Decimal(10, 2)
+  currency            String        @default("INR")
+  status              PaymentStatus @default(PENDING)
+  razorpayOrderId     String?       @unique
+  razorpayPaymentId   String?       @unique
+  razorpaySignature   String?
+  razorpayRefundId    String?
+  platformFee         Decimal?      @db.Decimal(10, 2)
+  tenantPayout        Decimal?      @db.Decimal(10, 2)
+  paymentMethod       String?
+  refundAmount        Decimal?      @db.Decimal(10, 2)
+  refundedAt          DateTime?
+  paidAt              DateTime?
+  failureReason       String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  booking             Booking       @relation(fields: [bookingId], references: [id])
+
+  @@index([tenantId])
+  @@index([razorpayOrderId])
+  @@index([razorpayPaymentId])
+  @@index([status])
+  @@map("payments")
+}
+
+model Plan {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  monthlyPrice    Decimal  @db.Decimal(10, 2)
+  annualPrice     Decimal  @db.Decimal(10, 2)
+  commissionRate  Decimal  @db.Decimal(5, 2)
+  maxVenues       Int      @default(1)
+  maxCourts       Int      @default(3)
+  maxStaff        Int      @default(5)
+  features        Json
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  subscriptions   Subscription[]
+
+  @@map("plans")
+}
+
+model Subscription {
+  id                     String             @id @default(cuid())
+  tenantId               String             @unique
+  planId                 String
+  status                 SubscriptionStatus @default(TRIAL)
+  currentPeriodStart     DateTime
+  currentPeriodEnd       DateTime
+  trialEndsAt            DateTime?
+  razorpaySubscriptionId String?            @unique
+  cancelledAt            DateTime?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  tenant                 Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan                   Plan               @relation(fields: [planId], references: [id])
+
+  @@index([tenantId])
+  @@index([status])
+  @@map("subscriptions")
+}
+
+model CancellationPolicy {
+  id          String                 @id @default(cuid())
+  tenantId    String                 @unique
+  policyType  CancellationPolicyType @default(MODERATE)
+  customRules Json?
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  tenant      Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("cancellation_policies")
+}
+
+model Notification {
+  id          String              @id @default(cuid())
+  tenantId    String?
+  userId      String
+  type        NotificationType
+  channel     NotificationChannel
+  title       String
+  body        String
+  metadata    Json?
+  sentAt      DateTime?
+  isRead      Boolean             @default(false)
+  createdAt   DateTime            @default(now())
+
+  tenant      Tenant?             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([type])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  tenantId    String?
+  userId      String
+  action      String
+  entity      String
+  entityId    String
+  oldValue    Json?
+  newValue    Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

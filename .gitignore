@@ -24,3 +24,8 @@ coverage/
 
 # Logs
 *.log
+
+# Turbo
+.turbo/
+
+

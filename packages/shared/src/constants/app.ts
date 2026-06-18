@@ -1,0 +1,11 @@
+export const APP_NAME = 'BookMyTurf';
+export const DEFAULT_CURRENCY = 'INR';
+export const DEFAULT_TIMEZONE = 'Asia/Kolkata';
+export const BOOKING_HOLD_MINUTES = 10;
+export const TRIAL_DAYS = 14;
+export const OTP_EXPIRY_MINUTES = 10;
+export const MAX_OTP_ATTEMPTS = 5;
+export const JWT_ACCESS_EXPIRY = '15m';
+export const JWT_REFRESH_EXPIRY = '7d';
+export const MAX_FILE_SIZE_MB = 5;
+export const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
