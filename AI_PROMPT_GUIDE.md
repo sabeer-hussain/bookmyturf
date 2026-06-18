@@ -1,6 +1,7 @@
 # BookMyTurf — AI Tool Prompt Guide
 
 ## How to Use This File
+
 Copy-paste the relevant prompt below when starting a new session with any AI tool (ChatGPT, Claude, Cursor, Copilot, etc.).
 
 ---
@@ -32,7 +33,7 @@ RULES:
 - After completing each step, verify against the relevant doc to confirm nothing is missed
 - Use TypeScript everywhere, pnpm as package manager, Turborepo for monorepo
 
-CURRENT STATUS: Phase 1 (Requirements) and Phase 2 (Design) are complete. Start Phase 3 — scaffold the Turborepo monorepo with NestJS backend and Next.js frontend exactly as described in docs/2.1-folder-structure.md.
+CURRENT STATUS: Phase 1 (Requirements), Phase 2 (Design), and Phase 3 (Scaffolding) are complete. Start Phase 4 — implement features sprint by sprint as described in docs/2.4-sprint-plan.md. Follow the existing code structure in the repo.
 ```
 
 ---
@@ -40,11 +41,24 @@ CURRENT STATUS: Phase 1 (Requirements) and Phase 2 (Design) are complete. Start 
 ## Prompt 2: Continuing Phase 4 (Development — any sprint)
 
 ```
-I'm building BookMyTurf. All docs are in the `docs/` folder — read them first.
+I'm building BookMyTurf — a multi-tenant SaaS for sports turf booking in India.
 
-The project is already scaffolded (Phase 3 done). I'm now in Phase 4 (Development).
+SETUP:
+- Read README.md first for full project overview
+- Read docs/3.0-project-scaffolding.md to understand the codebase structure
+- Read docs/2.4-sprint-plan.md for the development timeline
+- The project is already scaffolded (Phase 3 done). I'm now in Phase 4.
 
 Current sprint: [WEEK NUMBER] — [SPRINT NAME from docs/2.4-sprint-plan.md]
+
+REFERENCE DOCS:
+- docs/2.0-requirements.md — User stories and acceptance criteria
+- docs/2.1-folder-structure.md — Where to put new files (folder conventions)
+- docs/2.2-database-schema.md — Prisma schema (already in apps/api/prisma/schema.prisma)
+- docs/2.3-api-design.md — All API endpoints (method, path, auth, role, response)
+- docs/2.4-sprint-plan.md — What to build this sprint (daily tasks)
+- docs/2.5-architecture-diagram.md — System architecture and flows
+- docs/2.6-environment-variables.md — Any new env vars needed for integrations
 
 RULES:
 - Implement features for this sprint ONLY (from docs/2.4-sprint-plan.md)
@@ -55,6 +69,16 @@ RULES:
 - Follow existing code patterns in the codebase — do not introduce new libraries or patterns
 - Write unit tests for business logic, integration tests for API endpoints
 - After implementing each feature, verify it matches the acceptance criteria in docs/2.0-requirements.md
+- Commit messages must follow conventional commits (feat:, fix:, docs:, chore:, etc.)
+- Create feature branch: feat/sprint-[N]-[name] (e.g., feat/sprint-1-auth)
+
+LOCAL SETUP (if needed):
+- docker-compose up -d (start PostgreSQL + Redis)
+- cp apps/api/.env.example apps/api/.env
+- cp apps/web/.env.example apps/web/.env.local
+- pnpm install
+- cd apps/api && pnpm prisma migrate dev
+- pnpm dev (starts both apps)
 ```
 
 ---

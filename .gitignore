@@ -24,3 +24,11 @@ coverage/
 
 # Logs
 *.log
+
+# Turbo
+.turbo/
+
+# TypeScript build cache
+*.tsbuildinfo
+
+
