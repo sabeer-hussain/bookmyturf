@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/c
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { OAuth2Client } from 'google-auth-library';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OtpService } from './otp/otp.service';
 
@@ -73,6 +74,65 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new UnauthorizedException('User not found');
     return this.sanitizeUser(user);
+  }
+
+  async googleLogin(idToken: string) {
+    const clientId = this.config.get('google.clientId');
+    if (!clientId) {
+      throw new UnauthorizedException('Google OAuth not configured');
+    }
+
+    const client = new OAuth2Client(clientId);
+    let payload: any;
+
+    try {
+      const ticket = await client.verifyIdToken({ idToken, audience: clientId });
+      payload = ticket.getPayload();
+    } catch {
+      throw new UnauthorizedException('Invalid Google ID token');
+    }
+
+    const { email, given_name, family_name, picture, sub: googleId } = payload;
+
+    let user = await this.prisma.user.findUnique({ where: { email } });
+
+    if (!user) {
+      user = await this.prisma.user.findUnique({ where: { googleId } });
+    }
+
+    if (!user) {
+      user = await this.prisma.user.create({
+        data: {
+          email,
+          googleId,
+          firstName: given_name || 'User',
+          lastName: family_name || null,
+          avatar: picture || null,
+          emailVerified: true,
+          role: 'CUSTOMER',
+        },
+      });
+    } else if (!user.googleId) {
+      user = await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          googleId,
+          avatar: user.avatar || picture,
+          emailVerified: true,
+          lastLoginAt: new Date(),
+        },
+      });
+    } else {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { lastLoginAt: new Date() },
+      });
+    }
+
+    const tokens = await this.generateTokens(user.id, user.role, user.tenantId);
+    await this.updateRefreshToken(user.id, tokens.refreshToken);
+
+    return { ...tokens, user: this.sanitizeUser(user) };
   }
 
   async generateTokens(userId: string, role: string, tenantId: string | null) {
