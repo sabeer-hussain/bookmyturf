@@ -60,6 +60,8 @@ Read the `docs/` folder in this order:
 
 **Phase 3 — Project Scaffolding:** 13. `docs/3.0-project-scaffolding.md` — What was set up, tech versions, commands, how to extend
 
+**Phase 4 — Implementation:** 14. `docs/4.1-auth-flow.md` — Auth system (OTP, JWT, refresh tokens, rate limiting)
+
 **Visual diagrams:**
 
 - `docs/2.2-dbdiagram.dbml` — Paste at [dbdiagram.io](https://dbdiagram.io) for ER diagram
@@ -138,8 +140,8 @@ docker-compose up -d
 cp apps/api/.env.example apps/api/.env
 cp apps/web/.env.example apps/web/.env.local
 
-# 5. Run database migration (after Phase 4 — auth sprint)
-# cd apps/api && pnpm prisma migrate dev
+# 5. Run database migration
+cd apps/api && pnpm prisma migrate dev
 
 # 6. Start development
 pnpm dev
