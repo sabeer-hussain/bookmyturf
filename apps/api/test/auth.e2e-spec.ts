@@ -1,9 +1,11 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule, JwtService } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { Test } from '@nestjs/testing';
 import { TransformInterceptor } from '../src/common/interceptors/transform.interceptor';
+import { JwtAuthGuard } from '../src/common/guards/auth.guard';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const request = require('supertest');
 import { AuthController } from '../src/modules/auth/auth.controller';
@@ -48,6 +50,7 @@ describe('Auth (e2e)', () => {
         AuthService,
         OtpService,
         JwtStrategy,
+        { provide: APP_GUARD, useClass: JwtAuthGuard },
         { provide: RedisService, useValue: redis },
         { provide: PrismaService, useValue: prisma },
         { provide: OTP_PROVIDER, useValue: { sendOtp: jest.fn() } },
