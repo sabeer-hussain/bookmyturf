@@ -19,6 +19,10 @@ export default () => ({
     templateId: process.env.OTP_TEMPLATE_ID,
     expiryMinutes: parseInt(process.env.OTP_EXPIRY_MINUTES || '10', 10),
   },
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  },
   razorpay: {
     keyId: process.env.RAZORPAY_KEY_ID,
     keySecret: process.env.RAZORPAY_KEY_SECRET,

@@ -128,6 +128,14 @@ describe('AuthService', () => {
     });
   });
 
+  describe('googleLogin', () => {
+    it('throws when GOOGLE_CLIENT_ID not configured', async () => {
+      await expect(authService.googleLogin('some-token')).rejects.toThrow(
+        'Google OAuth not configured',
+      );
+    });
+  });
+
   describe('getMe', () => {
     it('returns sanitized user', async () => {
       prisma.user.findUnique.mockResolvedValue({

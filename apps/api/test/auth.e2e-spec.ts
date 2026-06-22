@@ -148,6 +148,19 @@ describe('Auth (e2e)', () => {
     });
   });
 
+  describe('POST /v1/auth/google', () => {
+    it('rejects empty body', () => {
+      return request(app.getHttpServer()).post('/v1/auth/google').send({}).expect(400);
+    });
+
+    it('rejects when GOOGLE_CLIENT_ID not configured', () => {
+      return request(app.getHttpServer())
+        .post('/v1/auth/google')
+        .send({ idToken: 'some-invalid-token' })
+        .expect(401);
+    });
+  });
+
   describe('POST /v1/auth/logout', () => {
     it('rejects unauthenticated request', () => {
       return request(app.getHttpServer()).post('/v1/auth/logout').expect(401);
