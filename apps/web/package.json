@@ -7,23 +7,36 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@bookmyturf/shared": "workspace:*",
+    "@react-oauth/google": "^0.13.5",
+    "axios": "^1.18.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.21.0",
     "next": "^14.2.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "@bookmyturf/shared": "workspace:*"
+    "tailwind-merge": "^3.6.0",
+    "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
+    "@bookmyturf/eslint-config": "workspace:*",
+    "@bookmyturf/tsconfig": "workspace:*",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^20.11.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
+    "@vitejs/plugin-react": "^6.0.2",
     "autoprefixer": "^10.4.17",
+    "jsdom": "^29.1.1",
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
     "typescript": "^5.4.0",
-    "@bookmyturf/tsconfig": "workspace:*",
-    "@bookmyturf/eslint-config": "workspace:*"
+    "vitest": "^4.1.9"
   }
 }
