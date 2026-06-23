@@ -50,7 +50,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback((accessToken: string, refreshToken: string, userData: User) => {
     setAccessToken(accessToken);
     localStorage.setItem('refreshToken', refreshToken);
-    document.cookie = `refreshToken=${refreshToken}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+    const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+    document.cookie = `refreshToken=${refreshToken}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax${secure}`;
     setUser(userData);
   }, []);
 

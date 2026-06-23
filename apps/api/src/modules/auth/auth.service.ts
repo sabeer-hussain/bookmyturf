@@ -30,7 +30,7 @@ export class AuthService {
         data: { phone, firstName: 'User', phoneVerified: true, role: 'CUSTOMER' },
       });
     } else {
-      await this.prisma.user.update({
+      user = await this.prisma.user.update({
         where: { id: user.id },
         data: { phoneVerified: true, lastLoginAt: new Date() },
       });
