@@ -60,7 +60,7 @@ Read the `docs/` folder in this order:
 
 **Phase 3 — Project Scaffolding:** 13. `docs/3.0-project-scaffolding.md` — What was set up, tech versions, commands, how to extend
 
-**Phase 4 — Implementation:** 14. `docs/4.1-auth-flow.md` — Auth system (OTP, JWT, refresh tokens, rate limiting)
+**Phase 4 — Implementation:** 14. `docs/4.1-auth-flow.md` — Auth system (OTP, JWT, refresh tokens, rate limiting) 15. `docs/4.2-tenant-onboarding.md` — Tenant onboarding (CRUD, isolation, slug, trial)
 
 **Visual diagrams:**
 
