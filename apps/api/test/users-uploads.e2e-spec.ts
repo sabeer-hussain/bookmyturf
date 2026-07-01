@@ -161,4 +161,17 @@ describe('Users & Uploads (e2e)', () => {
         .expect(401);
     });
   });
+
+  describe('PUT /v1/uploads/file/:folder/:filename', () => {
+    it('uploads file in dev mode (public endpoint)', () => {
+      return request(app.getHttpServer())
+        .put('/v1/uploads/file/avatars/test-upload.png')
+        .set('Content-Type', 'image/png')
+        .send(Buffer.from('fake-image-data'))
+        .expect(200)
+        .expect((res: any) => {
+          expect(res.body.data.message).toBe('File uploaded');
+        });
+    });
+  });
 });

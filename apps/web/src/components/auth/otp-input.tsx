@@ -73,7 +73,7 @@ export function OtpInput({ phone, onSubmit, onResend, onBack }: OtpInputProps) {
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <Label>Enter OTP sent to {phone}</Label>
+        <Label>Enter OTP sent to {phone.replace(/^\+91(\d+)$/, '+91 $1')}</Label>
         <div className="flex justify-center gap-2">
           {otp.map((digit, index) => (
             <input
