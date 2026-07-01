@@ -31,4 +31,7 @@ coverage/
 # TypeScript build cache
 *.tsbuildinfo
 
+# Uploads (dev mode runtime files)
+apps/api/uploads/
+
 

@@ -20,8 +20,9 @@ export class DevUploadProvider implements UploadProvider {
     const ext = fileName.split('.').pop();
     const key = `${folder}/${randomUUID()}.${ext}`;
     mkdirSync(join(this.uploadDir, folder), { recursive: true });
-    const uploadUrl = `http://localhost:4000/uploads/${key}`;
-    const fileUrl = uploadUrl;
+    const baseUrl = `http://localhost:4000`;
+    const uploadUrl = `${baseUrl}/v1/uploads/file/${key}`;
+    const fileUrl = `${baseUrl}/uploads/${key}`;
     return { uploadUrl, fileUrl };
   }
 }

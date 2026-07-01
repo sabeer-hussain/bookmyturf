@@ -10,6 +10,7 @@ const protectedPrefixes = [
   '/settings',
   '/customers',
   '/admin',
+  '/onboarding',
 ];
 
 export function middleware(request: NextRequest) {

@@ -20,6 +20,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (accessToken: string, refreshToken: string, user: User) => void;
   logout: () => Promise<void>;
+  refetchUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -65,11 +66,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem('refreshToken');
     document.cookie = 'refreshToken=; path=/; max-age=0';
     setUser(null);
+    window.location.href = '/login';
+  }, []);
+
+  const refetchUser = useCallback(async () => {
+    try {
+      const res = await api.get('/auth/me');
+      setUser(res.data.data);
+    } catch {
+      // Ignore
+    }
   }, []);
 
   const value = useMemo(
-    () => ({ user, isAuthenticated: !!user, isLoading, login, logout }),
-    [user, isLoading, login, logout],
+    () => ({ user, isAuthenticated: !!user, isLoading, login, logout, refetchUser }),
+    [user, isLoading, login, logout, refetchUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
