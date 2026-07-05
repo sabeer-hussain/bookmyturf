@@ -3,82 +3,77 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function main() {
-  // Seed Sports
-  const sports = [
-    { name: 'Cricket', icon: 'cricket' },
-    { name: 'Football', icon: 'football' },
-    { name: 'Badminton', icon: 'badminton' },
-    { name: 'Tennis', icon: 'tennis' },
-    { name: 'Basketball', icon: 'basketball' },
-    { name: 'Volleyball', icon: 'volleyball' },
-    { name: 'Box Cricket', icon: 'box-cricket' },
-    { name: 'Futsal', icon: 'futsal' },
-    { name: 'Table Tennis', icon: 'table-tennis' },
-    { name: 'Pickleball', icon: 'pickleball' },
-  ];
+  console.log('Seeding plans...');
 
-  for (const sport of sports) {
-    await prisma.sport.upsert({
-      where: { name: sport.name },
-      update: {},
-      create: sport,
-    });
-  }
-  console.log('Seeded sports');
-
-  // Seed Subscription Plans
   const plans = [
     {
+      id: 'plan-starter',
       name: 'Starter',
-      description: 'For small turfs getting started',
+      description: 'Perfect for single-venue turf owners getting started',
       monthlyPrice: 999,
-      annualPrice: 9999,
-      commissionRate: 8.0,
-      maxVenues: 1,
-      maxCourts: 2,
-      maxStaff: 3,
-      features: ['basic_analytics', 'email_notifications'],
-    },
-    {
-      name: 'Pro',
-      description: 'For growing turf businesses',
-      monthlyPrice: 2499,
-      annualPrice: 24999,
-      commissionRate: 5.0,
+      annualPrice: 9990,
+      commissionRate: 8,
       maxVenues: 3,
-      maxCourts: 10,
-      maxStaff: 10,
-      features: ['analytics', 'whatsapp', 'email', 'staff_management', 'custom_branding'],
+      maxCourts: 5,
+      maxStaff: 3,
+      features: {
+        booking: true,
+        analytics: false,
+        whatsappNotifications: false,
+        emailNotifications: true,
+        customBranding: false,
+        prioritySupport: false,
+      },
     },
     {
-      name: 'Enterprise',
-      description: 'For multi-location turf chains',
-      monthlyPrice: 4999,
-      annualPrice: 49999,
-      commissionRate: 3.0,
+      id: 'plan-pro',
+      name: 'Pro',
+      description: 'For growing turf businesses with multiple courts',
+      monthlyPrice: 2499,
+      annualPrice: 24990,
+      commissionRate: 5,
       maxVenues: 10,
-      maxCourts: 50,
-      maxStaff: 50,
-      features: [
-        'advanced_analytics',
-        'whatsapp',
-        'email',
-        'staff_management',
-        'custom_branding',
-        'api_access',
-        'priority_support',
-      ],
+      maxCourts: 25,
+      maxStaff: 10,
+      features: {
+        booking: true,
+        analytics: true,
+        whatsappNotifications: true,
+        emailNotifications: true,
+        customBranding: true,
+        prioritySupport: false,
+      },
+    },
+    {
+      id: 'plan-enterprise',
+      name: 'Enterprise',
+      description: 'Unlimited access for large sports facility chains',
+      monthlyPrice: 4999,
+      annualPrice: 49990,
+      commissionRate: 3,
+      maxVenues: 999,
+      maxCourts: 999,
+      maxStaff: 999,
+      features: {
+        booking: true,
+        analytics: true,
+        whatsappNotifications: true,
+        emailNotifications: true,
+        customBranding: true,
+        prioritySupport: true,
+      },
     },
   ];
 
   for (const plan of plans) {
     await prisma.plan.upsert({
-      where: { id: plan.name.toLowerCase() },
-      update: {},
-      create: { id: plan.name.toLowerCase(), ...plan },
+      where: { id: plan.id },
+      update: plan,
+      create: plan,
     });
   }
-  console.log('Seeded plans');
+
+  console.log(`Seeded ${plans.length} plans`);
 }
 
 main()
