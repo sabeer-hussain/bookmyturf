@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/auth-context';
 import { TenantProvider, useTenant } from '@/contexts/tenant-context';
+import { api } from '@/lib/api-client';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -32,6 +33,34 @@ const allMenuItems = [
   { label: 'Staff', href: '/staff', icon: Users, roles: ['TURF_OWNER', 'TURF_MANAGER'] },
   { label: 'Settings', href: '/settings', icon: Settings, roles: ['TURF_OWNER'] },
 ];
+
+function TrialBanner() {
+  const [trialDaysLeft, setTrialDaysLeft] = useState<number | null>(null);
+
+  useEffect(() => {
+    api
+      .get('/subscriptions/current')
+      .then((res) => {
+        const data = res.data.data;
+        if (data.status === 'TRIAL' && data.trialDaysLeft > 0) {
+          setTrialDaysLeft(data.trialDaysLeft);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  if (trialDaysLeft === null) return null;
+
+  return (
+    <div className="border-b bg-primary/5 px-4 py-2 text-center text-sm">
+      <span className="text-primary font-medium">{trialDaysLeft} days left in your free trial</span>
+      {' • '}
+      <Link href="/settings/billing" className="text-primary underline hover:no-underline">
+        Upgrade now
+      </Link>
+    </div>
+  );
+}
 
 function DashboardContent({ children }: { children: React.ReactNode }) {
   const { user, logout, isLoading: authLoading } = useAuth();
@@ -147,6 +176,9 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
             </Button>
           </div>
         </header>
+
+        {/* Trial Banner */}
+        <TrialBanner />
 
         {/* Page Content */}
         <main className="flex-1 p-4 lg:p-6">{children}</main>
