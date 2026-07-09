@@ -34,4 +34,7 @@ coverage/
 # Uploads (dev mode runtime files)
 apps/api/uploads/
 
+# Chat session saves
+bookmyturf-sprint1-2.json
+
 

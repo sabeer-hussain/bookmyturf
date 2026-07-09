@@ -113,7 +113,7 @@ Read the `docs/` folder in this order:
 
 If using ChatGPT, Cursor, Copilot, or any AI assistant, use this prompt:
 
-> I'm building BookMyTurf — a multi-tenant SaaS for sports turf booking in India. All design documents are in the `docs/` folder. Read them all first. I'm currently at Phase 4 (Development). The project is already scaffolded. Help me implement features sprint by sprint following docs/2.4-sprint-plan.md. Use existing code patterns, follow docs/2.3-api-design.md for endpoints, and docs/2.2-database-schema.md for Prisma models.
+> I'm building BookMyTurf — a multi-tenant SaaS for sports turf booking in India. Read `CONTRIBUTING.md` for all project conventions first. All design documents are in the `docs/` folder. Read them all first. I'm currently at Phase 4 (Development). The project is already scaffolded. Help me implement features sprint by sprint following docs/2.4-sprint-plan.md. Use existing code patterns, follow docs/2.3-api-design.md for endpoints, and docs/2.2-database-schema.md for Prisma models.
 
 ## How to Run Locally
 

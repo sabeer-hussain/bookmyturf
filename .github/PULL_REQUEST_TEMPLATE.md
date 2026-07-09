@@ -14,6 +14,10 @@ Closes #[issue-number]
 
 - [Key changes]
 
+### Flow
+
+[Step-by-step internal logic for the main feature/operation]
+
 ### New Dependencies (if any)
 
 - [package] — [purpose]
