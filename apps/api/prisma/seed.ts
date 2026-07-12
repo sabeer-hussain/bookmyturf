@@ -3,6 +3,15 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function main() {
+  console.log('Seeding database...');
+
+  await seedPlans();
+  await seedSports();
+
+  console.log('Seeding complete!');
+}
+
+async function seedPlans() {
   console.log('Seeding plans...');
 
   const plans = [
@@ -73,7 +82,34 @@ async function main() {
     });
   }
 
-  console.log(`Seeded ${plans.length} plans`);
+  console.log(`  ✓ ${plans.length} plans seeded`);
+}
+
+async function seedSports() {
+  console.log('Seeding sports...');
+
+  const sports = [
+    { name: 'Cricket', icon: 'cricket' },
+    { name: 'Box Cricket', icon: 'box-cricket' },
+    { name: 'Football', icon: 'football' },
+    { name: 'Futsal', icon: 'futsal' },
+    { name: 'Badminton', icon: 'badminton' },
+    { name: 'Pickleball', icon: 'pickleball' },
+    { name: 'Tennis', icon: 'tennis' },
+    { name: 'Basketball', icon: 'basketball' },
+    { name: 'Volleyball', icon: 'volleyball' },
+    { name: 'Table Tennis', icon: 'table-tennis' },
+  ];
+
+  for (const sport of sports) {
+    await prisma.sport.upsert({
+      where: { name: sport.name },
+      update: { icon: sport.icon },
+      create: sport,
+    });
+  }
+
+  console.log(`  ✓ ${sports.length} sports seeded`);
 }
 
 main()
