@@ -109,6 +109,6 @@ export class CreateVenueDto {
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(5, { message: 'Maximum 5 images allowed per venue' })
-  @IsUrl({}, { each: true, message: 'Each image must be a valid URL' })
+  @IsUrl({ require_tld: false }, { each: true, message: 'Each image must be a valid URL' })
   images?: string[];
 }

@@ -16,7 +16,7 @@ function LoginContent() {
   const { login } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl') || '/';
+  const callbackUrl = searchParams.get('callbackUrl') || '/bookings';
 
   const handleSendOtp = async (phoneNumber: string) => {
     await api.post('/auth/otp/send', { phone: phoneNumber });

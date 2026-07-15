@@ -10,7 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
   Calendar,
-  LayoutGrid,
+  Building2,
   Clock,
   BarChart3,
   Users,
@@ -27,7 +27,7 @@ const allMenuItems = [
     icon: Calendar,
     roles: ['TURF_OWNER', 'TURF_MANAGER', 'TURF_STAFF'],
   },
-  { label: 'Courts', href: '/courts', icon: LayoutGrid, roles: ['TURF_OWNER', 'TURF_MANAGER'] },
+  { label: 'Venues', href: '/venues', icon: Building2, roles: ['TURF_OWNER', 'TURF_MANAGER'] },
   { label: 'Slots', href: '/slots', icon: Clock, roles: ['TURF_OWNER', 'TURF_MANAGER'] },
   { label: 'Analytics', href: '/analytics', icon: BarChart3, roles: ['TURF_OWNER'] },
   { label: 'Staff', href: '/staff', icon: Users, roles: ['TURF_OWNER', 'TURF_MANAGER'] },
