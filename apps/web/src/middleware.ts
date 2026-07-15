@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 const publicRoutes = ['/', '/login', '/register'];
 const protectedPrefixes = [
   '/bookings',
-  '/courts',
+  '/venues',
   '/slots',
   '/analytics',
   '/staff',

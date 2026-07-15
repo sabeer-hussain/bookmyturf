@@ -14,8 +14,10 @@ export class PresignedUrlDto {
   })
   fileType!: string;
 
-  @ApiProperty({ example: 'avatars', enum: ['avatars', 'logos'] })
+  @ApiProperty({ example: 'venues', enum: ['avatars', 'logos', 'venues', 'courts'] })
   @IsString()
-  @IsIn(['avatars', 'logos'], { message: 'Folder must be avatars or logos' })
+  @IsIn(['avatars', 'logos', 'venues', 'courts'], {
+    message: 'Folder must be avatars, logos, venues, or courts',
+  })
   folder!: string;
 }
