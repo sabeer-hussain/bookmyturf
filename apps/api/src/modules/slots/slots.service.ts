@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { CourtSport, DayOfWeek, Prisma, SlotConfig, Venue } from '@prisma/client';
+import { IAvailabilityResponse, SlotStatus } from '@bookmyturf/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateSlotConfigDto } from './dto/create-slot-config.dto';
 import { UpdateSlotConfigDto } from './dto/update-slot-config.dto';
@@ -15,6 +16,7 @@ import {
   isAlignedToBase,
   isWithinOperatingHours,
   rangesOverlap,
+  resolveWeekday,
   TimeRange,
 } from './slot-time.util';
 
@@ -169,6 +171,72 @@ export class SlotsService {
     });
   }
 
+  /**
+   * Compute slot availability for a court-sport on a given date.
+   *
+   * Pure/deterministic: expands the court-sport's active slot configs for the
+   * date's weekday into a priced grid. Every slot is AVAILABLE for now — the
+   * booked-slot subtraction seam (see below) returns none until Sprint 5 wires
+   * in Booking/BookingSlot. Reused unchanged by the Sprint 5 public endpoint.
+   *
+   * Note: no past-date/lead-time filtering here — that is a Sprint 5 booking concern.
+   */
+  async computeAvailability(
+    tenantId: string,
+    courtSportId: string,
+    date: string,
+  ): Promise<IAvailabilityResponse> {
+    const courtSport = await this.loadCourtSportWithSport(tenantId, courtSportId);
+
+    let weekday: DayOfWeek;
+    try {
+      weekday = resolveWeekday(date) as DayOfWeek;
+    } catch {
+      throw new BadRequestException({
+        code: 'INVALID_DATE',
+        message: `Invalid date "${date}"; expected a valid calendar date in YYYY-MM-DD format`,
+      });
+    }
+
+    const configs = await this.prisma.slotConfig.findMany({
+      where: { courtSportId, dayOfWeek: weekday, isActive: true },
+      orderBy: { startTime: 'asc' },
+    });
+
+    const basePrice = Number(courtSport.pricePerSlot);
+    const peakPrice =
+      courtSport.peakPricePerSlot != null ? Number(courtSport.peakPricePerSlot) : null;
+
+    // Booked-slot subtraction seam (Sprint 5): given a date, load booked BookingSlots
+    // for this court-sport and mark matching grid slots as BOOKED. Returns none for now.
+    const bookedRanges: TimeRange[] = [];
+
+    const slots = configs
+      .map((config) => {
+        const isBooked = bookedRanges.some((b) =>
+          rangesOverlap({ startTime: config.startTime, endTime: config.endTime }, b),
+        );
+        const price = config.isPeakHour && peakPrice != null ? peakPrice : basePrice;
+        return {
+          startTime: config.startTime,
+          endTime: config.endTime,
+          status: isBooked ? SlotStatus.BOOKED : SlotStatus.AVAILABLE,
+          price,
+        };
+      })
+      .sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+    return {
+      date,
+      courtSport: {
+        id: courtSport.id,
+        sportName: courtSport.sport.name,
+        pricePerSlot: basePrice,
+      },
+      slots,
+    };
+  }
+
   // ──────────────────────────────────────────────────────────────────────────
   // Internal helpers
   // ──────────────────────────────────────────────────────────────────────────
@@ -292,6 +360,29 @@ export class SlotsService {
     courtSportId: string,
   ): Promise<CourtSportWithContext> {
     return this.loadCourtSportContext(this.prisma, courtSportId, tenantId);
+  }
+
+  /**
+   * Loads a tenant-scoped court-sport including its sport (for `sportName`).
+   * Used by availability computation.
+   */
+  private async loadCourtSportWithSport(
+    tenantId: string,
+    courtSportId: string,
+  ): Promise<CourtSport & { sport: { name: string } }> {
+    const courtSport = await this.prisma.courtSport.findFirst({
+      where: {
+        id: courtSportId,
+        isActive: true,
+        court: { isActive: true, venue: { isActive: true, tenantId } },
+      },
+      include: { sport: { select: { name: true } } },
+    });
+
+    if (!courtSport) {
+      throw new NotFoundException('Court sport configuration not found');
+    }
+    return courtSport;
   }
 
   /**

@@ -7,6 +7,7 @@ import {
   isValidTime,
   isWithinOperatingHours,
   rangesOverlap,
+  resolveWeekday,
   toMinutes,
 } from './slot-time.util';
 
@@ -204,6 +205,42 @@ describe('slot-time.util', () => {
 
     it('throws on invalid baseSlotMinutes', () => {
       expect(() => generateSlots('06:00', '09:00', 0)).toThrow(/positive integer/);
+    });
+  });
+
+  describe('resolveWeekday', () => {
+    it.each([
+      ['2026-06-20', 'SATURDAY'],
+      ['2026-06-21', 'SUNDAY'],
+      ['2026-06-22', 'MONDAY'],
+      ['2026-09-01', 'TUESDAY'],
+      ['2000-01-01', 'SATURDAY'],
+      ['2024-02-29', 'THURSDAY'], // leap day
+    ])('resolves %s to %s', (date, expected) => {
+      expect(resolveWeekday(date)).toBe(expected);
+    });
+
+    it('is timezone-agnostic (same result regardless of process TZ)', () => {
+      const original = process.env.TZ;
+      try {
+        process.env.TZ = 'America/Los_Angeles'; // UTC-7/8
+        expect(resolveWeekday('2026-06-20')).toBe('SATURDAY');
+        process.env.TZ = 'Pacific/Kiritimati'; // UTC+14
+        expect(resolveWeekday('2026-06-20')).toBe('SATURDAY');
+      } finally {
+        process.env.TZ = original;
+      }
+    });
+
+    it('rejects malformed date strings', () => {
+      expect(() => resolveWeekday('2026-6-20')).toThrow(/expected YYYY-MM-DD/);
+      expect(() => resolveWeekday('20-06-2026')).toThrow(/expected YYYY-MM-DD/);
+      expect(() => resolveWeekday('not-a-date')).toThrow(/expected YYYY-MM-DD/);
+    });
+
+    it('rejects impossible calendar dates', () => {
+      expect(() => resolveWeekday('2026-02-30')).toThrow(/Invalid calendar date/);
+      expect(() => resolveWeekday('2026-13-01')).toThrow(/Invalid calendar date/);
     });
   });
 });

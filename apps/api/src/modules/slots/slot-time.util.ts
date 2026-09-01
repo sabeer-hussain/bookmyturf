@@ -141,3 +141,41 @@ export function generateSlots(
   }
   return slots;
 }
+
+/** Day-of-week names in JS `Date.getUTCDay()` order (0 = Sunday). Matches Prisma's DayOfWeek values. */
+const WEEKDAY_NAMES = [
+  'SUNDAY',
+  'MONDAY',
+  'TUESDAY',
+  'WEDNESDAY',
+  'THURSDAY',
+  'FRIDAY',
+  'SATURDAY',
+] as const;
+
+export type WeekdayName = (typeof WEEKDAY_NAMES)[number];
+
+/** Matches a "YYYY-MM-DD" calendar date. */
+export const YYYY_MM_DD_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Resolves the weekday name for a "YYYY-MM-DD" calendar date, **timezone-agnostic**.
+ *
+ * The date is interpreted purely by its calendar components via `Date.UTC`, so the
+ * result never shifts with the server's timezone (avoids the classic off-by-one-day bug).
+ * e.g. resolveWeekday("2026-06-20") === "SATURDAY" on any host.
+ */
+export function resolveWeekday(date: string): WeekdayName {
+  if (!YYYY_MM_DD_REGEX.test(date)) {
+    throw new Error(`Invalid date format: "${date}" (expected YYYY-MM-DD)`);
+  }
+  const [year, month, day] = date.split('-').map(Number);
+  const d = new Date(Date.UTC(year, month - 1, day));
+
+  // Reject impossible dates that JS would silently roll over (e.g. 2026-02-30).
+  if (d.getUTCFullYear() !== year || d.getUTCMonth() !== month - 1 || d.getUTCDate() !== day) {
+    throw new Error(`Invalid calendar date: "${date}"`);
+  }
+
+  return WEEKDAY_NAMES[d.getUTCDay()];
+}
