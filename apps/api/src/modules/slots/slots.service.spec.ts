@@ -264,4 +264,99 @@ describe('SlotsService', () => {
       await expect(service.remove('other-tenant', 'slot-1')).rejects.toThrow(NotFoundException);
     });
   });
+
+  describe('computeAvailability', () => {
+    const csWithSport = {
+      id: 'cs-1',
+      pricePerSlot: 800,
+      peakPricePerSlot: 1200,
+      isActive: true,
+      sport: { name: 'Football' },
+    };
+
+    beforeEach(() => {
+      // computeAvailability loads the court-sport with sport via findFirst
+      prisma.courtSport.findFirst.mockResolvedValue(csWithSport);
+    });
+
+    it('returns the documented shape with base/peak pricing', async () => {
+      prisma.slotConfig.findMany.mockResolvedValue([
+        makeConfig({ startTime: '06:00', endTime: '07:00', isPeakHour: false }),
+        makeConfig({ id: 's2', startTime: '18:00', endTime: '19:00', isPeakHour: true }),
+      ]);
+      const result = await service.computeAvailability('tenant-1', 'cs-1', '2026-06-22'); // Monday
+      expect(result).toEqual({
+        date: '2026-06-22',
+        courtSport: { id: 'cs-1', sportName: 'Football', pricePerSlot: 800 },
+        slots: [
+          { startTime: '06:00', endTime: '07:00', status: 'AVAILABLE', price: 800 },
+          { startTime: '18:00', endTime: '19:00', status: 'AVAILABLE', price: 1200 },
+        ],
+      });
+    });
+
+    it('queries slot configs for the resolved weekday', async () => {
+      prisma.slotConfig.findMany.mockResolvedValue([]);
+      await service.computeAvailability('tenant-1', 'cs-1', '2026-06-20'); // Saturday
+      expect(prisma.slotConfig.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ dayOfWeek: 'SATURDAY', isActive: true }),
+        }),
+      );
+    });
+
+    it('falls back to base price when a peak slot has no peakPricePerSlot', async () => {
+      prisma.courtSport.findFirst.mockResolvedValue({ ...csWithSport, peakPricePerSlot: null });
+      prisma.slotConfig.findMany.mockResolvedValue([
+        makeConfig({ startTime: '18:00', endTime: '19:00', isPeakHour: true }),
+      ]);
+      const result = await service.computeAvailability('tenant-1', 'cs-1', '2026-06-22');
+      expect(result.slots[0].price).toBe(800); // base, not peak
+    });
+
+    it('returns empty slots for a day with no configs', async () => {
+      prisma.slotConfig.findMany.mockResolvedValue([]);
+      const result = await service.computeAvailability('tenant-1', 'cs-1', '2026-06-22');
+      expect(result.slots).toEqual([]);
+    });
+
+    it('orders slots by startTime ascending', async () => {
+      prisma.slotConfig.findMany.mockResolvedValue([
+        makeConfig({ id: 'b', startTime: '19:00', endTime: '20:00' }),
+        makeConfig({ id: 'a', startTime: '06:00', endTime: '07:00' }),
+      ]);
+      const result = await service.computeAvailability('tenant-1', 'cs-1', '2026-06-22');
+      expect(result.slots.map((s) => s.startTime)).toEqual(['06:00', '19:00']);
+    });
+
+    it('converts Decimal prices to numbers', async () => {
+      const result = await service.computeAvailability('tenant-1', 'cs-1', '2026-06-22');
+      expect(typeof result.courtSport.pricePerSlot).toBe('number');
+    });
+
+    it('marks all slots AVAILABLE (booked-subtraction seam returns none)', async () => {
+      prisma.slotConfig.findMany.mockResolvedValue([makeConfig()]);
+      const result = await service.computeAvailability('tenant-1', 'cs-1', '2026-06-22');
+      expect(result.slots.every((s) => s.status === 'AVAILABLE')).toBe(true);
+    });
+
+    it('throws NotFound if court-sport not owned by tenant', async () => {
+      prisma.courtSport.findFirst.mockResolvedValue(null);
+      await expect(
+        service.computeAvailability('other-tenant', 'cs-1', '2026-06-22'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('rejects an invalid date format with a 400 (INVALID_DATE)', async () => {
+      await expect(
+        service.computeAvailability('tenant-1', 'cs-1', '20-06-2026'),
+      ).rejects.toMatchObject({ response: { code: 'INVALID_DATE' } });
+    });
+
+    it('rejects an impossible calendar date with a 400 (INVALID_DATE)', async () => {
+      await expect(
+        service.computeAvailability('tenant-1', 'cs-1', '2026-02-30'),
+      ).rejects.toMatchObject({ response: { code: 'INVALID_DATE' } });
+    });
+  });
 });

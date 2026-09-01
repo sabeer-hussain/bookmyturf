@@ -1,4 +1,4 @@
-import { BookingStatus, BookingSource } from '../constants/enums';
+import { BookingStatus, BookingSource, SlotStatus } from '../constants/enums';
 
 export interface IBooking {
   id: string;
@@ -23,6 +23,6 @@ export interface IBookingSlot {
 export interface ISlotAvailability {
   startTime: string;
   endTime: string;
-  status: string;
+  status: SlotStatus;
   price: number;
 }
