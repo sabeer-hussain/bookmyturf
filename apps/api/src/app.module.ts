@@ -16,6 +16,7 @@ import { SubscriptionsModule } from './modules/subscriptions/subscriptions.modul
 import { VenuesModule } from './modules/venues/venues.module';
 import { CourtsModule } from './modules/courts/courts.module';
 import { SportsModule } from './modules/sports/sports.module';
+import { SlotsModule } from './modules/slots/slots.module';
 import { JwtAuthGuard } from './common/guards/auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
@@ -44,6 +45,7 @@ import appConfig from './config/app.config';
     VenuesModule,
     CourtsModule,
     SportsModule,
+    SlotsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
