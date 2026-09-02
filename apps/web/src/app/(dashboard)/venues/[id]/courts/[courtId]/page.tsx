@@ -23,6 +23,7 @@ import {
   Clock,
   IndianRupee,
   Layers,
+  CalendarClock,
 } from 'lucide-react';
 
 interface CourtSport {
@@ -227,6 +228,16 @@ export default function CourtDetailPage() {
                     </div>
                   </div>
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Link
+                      href={`/venues/${venueId}/courts/${courtId}/sports/${cs.id}/slots`}
+                      className="rounded-md px-2 py-1.5 text-xs font-medium text-primary hover:bg-primary/10"
+                      aria-label="Configure slots"
+                    >
+                      <span className="flex items-center gap-1">
+                        <CalendarClock className="h-3.5 w-3.5" />
+                        Configure Slots
+                      </span>
+                    </Link>
                     <button
                       onClick={() => handleEdit(cs)}
                       className="rounded-md p-1.5 hover:bg-accent"

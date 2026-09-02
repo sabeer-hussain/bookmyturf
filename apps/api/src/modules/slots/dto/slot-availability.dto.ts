@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsString, Matches } from 'class-validator';
-import { YYYY_MM_DD_REGEX } from '../slot-time.util';
+import { YYYY_MM_DD_REGEX } from '@bookmyturf/shared';
 
 /**
  * Query params for availability lookup.

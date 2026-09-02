@@ -5,12 +5,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { CourtSport, DayOfWeek, Prisma, SlotConfig, Venue } from '@prisma/client';
-import { IAvailabilityResponse, SlotStatus } from '@bookmyturf/shared';
-import { PrismaService } from '../../prisma/prisma.service';
-import { CreateSlotConfigDto } from './dto/create-slot-config.dto';
-import { UpdateSlotConfigDto } from './dto/update-slot-config.dto';
-import { BulkCreateSlotsDto } from './dto/bulk-create-slots.dto';
 import {
+  IAvailabilityResponse,
+  SlotStatus,
   durationMinutes,
   findFirstOverlap,
   isAlignedToBase,
@@ -18,7 +15,11 @@ import {
   rangesOverlap,
   resolveWeekday,
   TimeRange,
-} from './slot-time.util';
+} from '@bookmyturf/shared';
+import { PrismaService } from '../../prisma/prisma.service';
+import { CreateSlotConfigDto } from './dto/create-slot-config.dto';
+import { UpdateSlotConfigDto } from './dto/update-slot-config.dto';
+import { BulkCreateSlotsDto } from './dto/bulk-create-slots.dto';
 
 /**
  * Prisma includes needed to resolve tenant + venue hours + baseSlotMinutes from

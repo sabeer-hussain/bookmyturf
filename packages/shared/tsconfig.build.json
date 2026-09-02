@@ -2,9 +2,13 @@
   "extends": "../../packages/tsconfig/base.json",
   "compilerOptions": {
     "target": "ES2021",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "lib": ["ES2021"]
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "lib": ["ES2021"],
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "declaration": true,
+    "noEmit": false
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist", "src/**/*.spec.ts"]
