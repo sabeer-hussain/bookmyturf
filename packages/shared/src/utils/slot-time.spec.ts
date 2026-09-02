@@ -9,9 +9,9 @@ import {
   rangesOverlap,
   resolveWeekday,
   toMinutes,
-} from './slot-time.util';
+} from './slot-time';
 
-describe('slot-time.util', () => {
+describe('slot-time util', () => {
   describe('isValidTime', () => {
     it.each(['00:00', '06:00', '18:30', '23:59'])('accepts valid time %s', (t) => {
       expect(isValidTime(t)).toBe(true);

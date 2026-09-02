@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsBoolean, IsEnum, IsOptional, IsString, Matches } from 'class-validator';
-import { HH_MM_REGEX } from '../slot-time.util';
+import { HH_MM_REGEX } from '@bookmyturf/shared';
 import { SlotDayOfWeek } from './create-slot-config.dto';
 
 export class UpdateSlotConfigDto {

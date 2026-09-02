@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsBoolean, IsEnum, IsNotEmpty, IsOptional, IsString, Matches } from 'class-validator';
-import { HH_MM_REGEX } from '../slot-time.util';
+import { HH_MM_REGEX } from '@bookmyturf/shared';
 
 /** Prisma DayOfWeek enum values (kept local to avoid a runtime import of @prisma/client in DTOs). */
 export enum SlotDayOfWeek {
