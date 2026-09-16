@@ -60,7 +60,7 @@ Read the `docs/` folder in this order:
 
 **Phase 3 — Project Scaffolding:** 13. `docs/3.0-project-scaffolding.md` — What was set up, tech versions, commands, how to extend
 
-**Phase 4 — Implementation:** 14. `docs/4.1-auth-flow.md` — Auth system (OTP, JWT, refresh tokens, rate limiting) 15. `docs/4.2-tenant-onboarding.md` — Tenant onboarding (CRUD, isolation, slug, trial) 16. `docs/4.3-venue-court-management.md` — Venue & court management (CRUD, sports, pricing, limits, UI)
+**Phase 4 — Implementation:** 14. `docs/4.1-auth-flow.md` — Auth system (OTP, JWT, refresh tokens, rate limiting) 15. `docs/4.2-tenant-onboarding.md` — Tenant onboarding (CRUD, isolation, slug, trial) 16. `docs/4.3-venue-court-management.md` — Venue & court management (CRUD, sports, pricing, limits, UI) 17. `docs/4.4-slot-configuration.md` — Slot configuration (config CRUD, bulk generation, peak/overlap validation, availability computation, weekly-grid UI)
 
 **Visual diagrams:**
 
@@ -85,26 +85,26 @@ Read the `docs/` folder in this order:
 
 ## Security & Monitoring
 
-| Area              | Tools/Approach                                          |
-| ----------------- | ------------------------------------------------------- |
-| Error tracking    | Sentry (free tier)                                      |
-| Logs & alarms     | AWS CloudWatch                                          |
-| Uptime monitoring | BetterUptime                                            |
-| Security headers  | Helmet.js                                               |
-| Rate limiting     | @nestjs/throttler (per IP + per tenant)                 |
-| Input validation  | class-validator + class-transformer                     |
-| CORS              | Configured per allowed origins                          |
-| SQL injection     | Prisma parameterized queries (built-in)                 |
-| XSS               | Next.js auto-escaping + DOMPurify                       |
-| Auth tokens       | JWT (15min access) + refresh token rotation (7 days)    |
-| Tenant isolation  | Prisma middleware auto-injects tenant_id on every query |
+| Area              | Tools/Approach                                                         |
+| ----------------- | ---------------------------------------------------------------------- |
+| Error tracking    | Sentry (free tier)                                                     |
+| Logs & alarms     | AWS CloudWatch                                                         |
+| Uptime monitoring | BetterUptime                                                           |
+| Security headers  | Helmet.js                                                              |
+| Rate limiting     | @nestjs/throttler (per IP + per tenant)                                |
+| Input validation  | class-validator + class-transformer                                    |
+| CORS              | Configured per allowed origins                                         |
+| SQL injection     | Prisma parameterized queries (built-in)                                |
+| XSS               | Next.js auto-escaping + DOMPurify                                      |
+| Auth tokens       | JWT (15min access) + refresh token rotation (7 days)                   |
+| Tenant isolation  | Per-service tenant scoping via JWT `tenantId` (explicit query filters) |
 
 ## Current Status
 
 - [x] Phase 1: Requirements Gathering — Complete
 - [x] Phase 2: System Design & Architecture — Complete
 - [x] Phase 3: Project Setup & Scaffolding — Complete
-- [ ] Phase 4: Development (Sprint-wise) — Next
+- [ ] Phase 4: Development (Sprint-wise) — In progress
 - [ ] Phase 5: Testing
 - [ ] Phase 6: Deployment
 - [ ] Phase 7: Launch
@@ -133,17 +133,20 @@ cd bookmyturf
 # 2. Install dependencies
 pnpm install
 
-# 3. Start PostgreSQL + Redis
+# 3. Build the shared package (required so API/web can resolve @bookmyturf/shared)
+pnpm --filter @bookmyturf/shared build
+
+# 4. Start PostgreSQL + Redis
 docker-compose up -d
 
-# 4. Setup environment variables
+# 5. Setup environment variables
 cp apps/api/.env.example apps/api/.env
 cp apps/web/.env.example apps/web/.env.local
 
-# 5. Run database migration
-cd apps/api && pnpm prisma migrate dev
+# 6. Run database migration + seed (plans + sports)
+cd apps/api && pnpm prisma migrate dev && pnpm prisma db seed && cd ../..
 
-# 6. Start development
+# 7. Start development
 pnpm dev
 ```
 

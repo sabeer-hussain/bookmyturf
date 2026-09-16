@@ -44,6 +44,19 @@ Closes #[issue-number]
 **Expected Output:** [...]
 **Why:** [...]
 
+## Verification Process
+
+### Backend
+
+- [ ] `pnpm type-check`, `pnpm lint`, `pnpm build` pass
+- [ ] `pnpm test` (unit) + `pnpm --filter @bookmyturf/api test:e2e` pass
+- [ ] Live/API verification where applicable (endpoints exercised against the running API)
+
+### UI
+
+- [ ] `pnpm --filter @bookmyturf/web test` (Vitest) passes; build clean
+- [ ] Visual verification in the browser (or N/A with reason, e.g. backend-only PR)
+
 ## Documentation
 
 - [Which docs updated]
