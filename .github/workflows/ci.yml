@@ -10,6 +10,41 @@ jobs:
   ci:
     runs-on: ubuntu-latest
 
+    # Service containers for the real-database integration tests (issue #31).
+    # The slots integration e2e boots the full AppModule, which connects to both
+    # PostgreSQL and Redis on startup.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: bookmyturf
+          POSTGRES_PASSWORD: bookmyturf_dev
+          POSTGRES_DB: bookmyturf
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bookmyturf"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # Test-only, non-production values. Used by both unit and e2e steps.
+      DATABASE_URL: postgresql://bookmyturf:bookmyturf_dev@localhost:5432/bookmyturf?schema=public
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
+      JWT_ACCESS_SECRET: dev-access-secret-change-in-production-32
+      JWT_REFRESH_SECRET: dev-refresh-secret-change-in-production-32
+
     steps:
       - uses: actions/checkout@v4
 
@@ -36,3 +71,14 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Migrate + seed test database
+        run: |
+          pnpm --filter @bookmyturf/api exec prisma migrate deploy
+          pnpm --filter @bookmyturf/api exec prisma db seed
+
+      - name: Test (unit)
+        run: pnpm test
+
+      - name: Test (e2e — includes real-DB slot integration)
+        run: pnpm --filter @bookmyturf/api test:e2e
