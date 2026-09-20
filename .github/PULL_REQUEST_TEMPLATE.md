@@ -1,8 +1,16 @@
+<!-- Keep every section; adapt by PR type. Sections marked (optional) may be omitted. See .github/PR_EXAMPLE.md. -->
+
 ## Summary
 
 [What was built in this PR]
 
 Closes #[issue-number]
+
+## Acceptance Criteria (optional)
+
+| #   | Criterion   | Status  |
+| --- | ----------- | ------- |
+| 1   | [criterion] | ✅ / ⬜ |
 
 ## What's Included
 
@@ -22,13 +30,21 @@ Closes #[issue-number]
 
 - [package] — [purpose]
 
+## Design Notes / Rationale (optional)
+
+- [decision] — [why]
+
 ## Testing
+
+<!-- List only the test types relevant to this PR. -->
 
 - ✅ [X] API unit tests ([N] new)
 - ✅ [X] API e2e tests ([N] new)
 - ✅ [X] web tests ([N] new)
 
 ## How to Test
+
+<!-- Feature PR: one block per scenario. Non-feature PR: the commands a reviewer runs. -->
 
 ### Test 1: [Scenario name]
 
