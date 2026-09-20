@@ -1,185 +1,142 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
-import { ConfigModule } from '@nestjs/config';
-import { JwtModule, JwtService } from '@nestjs/jwt';
-import { PassportModule } from '@nestjs/passport';
-import { Test } from '@nestjs/testing';
-import { JwtAuthGuard } from '../src/common/guards/auth.guard';
-import { RolesGuard } from '../src/common/guards/roles.guard';
-import { TransformInterceptor } from '../src/common/interceptors/transform.interceptor';
-import { JwtStrategy } from '../src/modules/auth/strategies/jwt.strategy';
-import { TenantsController } from '../src/modules/tenants/tenants.controller';
-import { TenantsService } from '../src/modules/tenants/tenants.service';
-import { PrismaService } from '../src/prisma/prisma.service';
-import appConfig from '../src/config/app.config';
+import { E2EContext, closeE2EApp, createE2EApp, truncateAll } from './support/e2e';
+import { createTenant, createUser } from './support/seed';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const request = require('supertest');
 
-describe('Tenants (e2e)', () => {
-  let app: INestApplication;
-  let jwtService: JwtService;
-  let prisma: Record<string, any>;
-
-  const ownerToken = () =>
-    jwtService.signAsync(
-      { sub: 'u1', role: 'TURF_OWNER', tenantId: 't1' },
-      { secret: 'dev-access-secret-change-in-production-32', expiresIn: '15m' },
-    );
-
-  const adminToken = () =>
-    jwtService.signAsync(
-      { sub: 'admin', role: 'SUPER_ADMIN', tenantId: null },
-      { secret: 'dev-access-secret-change-in-production-32', expiresIn: '15m' },
-    );
+/**
+ * REAL-DB e2e for Tenant Onboarding (module: tenants).
+ * Boots the full app against the test database; exercises onboarding, slug checks,
+ * ownership access control, and super-admin deactivation with real persistence.
+ */
+describe('Tenants (e2e — real DB)', () => {
+  let ctx: E2EContext;
 
   beforeAll(async () => {
-    prisma = {
-      tenant: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
-      user: { findUnique: jest.fn(), update: jest.fn() },
-      plan: { findFirst: jest.fn() },
-      subscription: { create: jest.fn() },
-    };
-
-    const module = await Test.createTestingModule({
-      imports: [
-        ConfigModule.forRoot({ isGlobal: true, load: [appConfig] }),
-        PassportModule.register({ defaultStrategy: 'jwt' }),
-        JwtModule.register({}),
-      ],
-      controllers: [TenantsController],
-      providers: [
-        TenantsService,
-        JwtStrategy,
-        { provide: APP_GUARD, useClass: JwtAuthGuard },
-        { provide: APP_GUARD, useClass: RolesGuard },
-        { provide: PrismaService, useValue: prisma },
-      ],
-    }).compile();
-
-    app = module.createNestApplication();
-    app.useGlobalPipes(
-      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
-    );
-    app.useGlobalInterceptors(new TransformInterceptor());
-    app.setGlobalPrefix('v1');
-    await app.init();
-
-    jwtService = module.get(JwtService);
+    ctx = await createE2EApp();
   });
 
   afterAll(async () => {
-    await app.close();
+    await closeE2EApp(ctx);
   });
 
-  describe('GET /v1/tenants/slug/:slug', () => {
-    it('returns available true for free slug (public)', async () => {
-      prisma.tenant.findUnique.mockResolvedValue(null);
-      return request(app.getHttpServer())
-        .get('/v1/tenants/slug/new-slug')
-        .expect(200)
-        .expect((res: any) => {
-          expect(res.body.success).toBe(true);
-          expect(res.body.data.available).toBe(true);
-        });
+  beforeEach(async () => {
+    await truncateAll(ctx.prisma);
+  });
+
+  describe('GET /v1/tenants/slug/:slug (public)', () => {
+    it('returns available=true for a free slug', async () => {
+      const res = await request(ctx.server()).get('/v1/tenants/slug/brand-new-slug');
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.available).toBe(true);
     });
 
-    it('returns available false for taken slug', async () => {
-      prisma.tenant.findUnique.mockResolvedValue({ id: 't1' });
-      return request(app.getHttpServer())
-        .get('/v1/tenants/slug/taken')
-        .expect(200)
-        .expect((res: any) => {
-          expect(res.body.data.available).toBe(false);
-        });
+    it('returns available=false for a taken slug', async () => {
+      await createTenant(ctx.prisma, { slug: 'taken-slug' });
+      const res = await request(ctx.server()).get('/v1/tenants/slug/taken-slug');
+      expect(res.status).toBe(200);
+      expect(res.body.data.available).toBe(false);
     });
   });
 
   describe('POST /v1/tenants/onboard', () => {
-    it('requires authentication', () => {
-      return request(app.getHttpServer()).post('/v1/tenants/onboard').send({}).expect(401);
+    it('requires authentication (401)', async () => {
+      const res = await request(ctx.server()).post('/v1/tenants/onboard').send({});
+      expect(res.status).toBe(401);
     });
 
-    it('validates required fields', async () => {
-      const token = await ownerToken();
-      return request(app.getHttpServer())
+    it('validates required fields (400)', async () => {
+      const user = await createUser(ctx.prisma, { role: 'CUSTOMER' });
+      const token = ctx.sign({ sub: user.id, role: 'CUSTOMER', tenantId: null });
+      const res = await request(ctx.server())
         .post('/v1/tenants/onboard')
-        .set('Authorization', `Bearer ${token}`)
-        .send({})
-        .expect(400);
+        .set(...ctx.auth(token))
+        .send({});
+      expect(res.status).toBe(400);
     });
 
-    it('creates tenant on valid request', async () => {
-      prisma.tenant.findUnique.mockResolvedValue(null);
-      prisma.user.findUnique.mockResolvedValue({ id: 'u1', tenantId: null });
-      prisma.tenant.create.mockResolvedValue({ id: 't1', name: 'Test', slug: 'test' });
-      prisma.user.update.mockResolvedValue({});
-      prisma.plan.findFirst.mockResolvedValue({ id: 'p1' });
-      prisma.subscription.create.mockResolvedValue({});
+    it('creates a tenant, links the user, and starts a subscription (real persistence)', async () => {
+      const user = await createUser(ctx.prisma, { role: 'CUSTOMER', tenantId: null });
+      const token = ctx.sign({ sub: user.id, role: 'CUSTOMER', tenantId: null });
 
-      const token = await jwtService.signAsync(
-        { sub: 'u1', role: 'CUSTOMER', tenantId: null },
-        { secret: 'dev-access-secret-change-in-production-32', expiresIn: '15m' },
-      );
-
-      return request(app.getHttpServer())
+      const res = await request(ctx.server())
         .post('/v1/tenants/onboard')
-        .set('Authorization', `Bearer ${token}`)
-        .send({ name: 'Test', slug: 'test', phone: '+919876543210', email: 'a@b.com' })
-        .expect(201)
-        .expect((res: any) => {
-          expect(res.body.success).toBe(true);
-          expect(res.body.data.slug).toBe('test');
+        .set(...ctx.auth(token))
+        .send({
+          name: 'Acme Turf',
+          slug: 'acme-turf',
+          phone: '+919876543210',
+          email: 'acme@turf.com',
         });
+
+      expect(res.status).toBe(201);
+      expect(res.body.data.slug).toBe('acme-turf');
+
+      // Verify real DB effects: tenant created, user linked, subscription started.
+      const tenant = await ctx.prisma.tenant.findUnique({ where: { slug: 'acme-turf' } });
+      expect(tenant).not.toBeNull();
+      const linked = await ctx.prisma.user.findUnique({ where: { id: user.id } });
+      expect(linked?.tenantId).toBe(tenant!.id);
+      const sub = await ctx.prisma.subscription.findUnique({ where: { tenantId: tenant!.id } });
+      expect(sub).not.toBeNull();
+    });
+
+    it('rejects a duplicate slug (400)', async () => {
+      await createTenant(ctx.prisma, { slug: 'dup-slug' });
+      const user = await createUser(ctx.prisma, { role: 'CUSTOMER', tenantId: null });
+      const token = ctx.sign({ sub: user.id, role: 'CUSTOMER', tenantId: null });
+      const res = await request(ctx.server())
+        .post('/v1/tenants/onboard')
+        .set(...ctx.auth(token))
+        .send({ name: 'Dup', slug: 'dup-slug', phone: '+919876500000', email: 'dup@turf.com' });
+      expect(res.status).toBe(400);
     });
   });
 
   describe('GET /v1/tenants/:id', () => {
-    it('returns tenant for owner', async () => {
-      prisma.tenant.findUnique.mockResolvedValue({ id: 't1', name: 'Test' });
-      const token = await ownerToken();
-      return request(app.getHttpServer())
-        .get('/v1/tenants/t1')
-        .set('Authorization', `Bearer ${token}`)
-        .expect(200)
-        .expect((res: any) => {
-          expect(res.body.data.name).toBe('Test');
-        });
+    it('returns the tenant for its owner', async () => {
+      const tenant = await createTenant(ctx.prisma, { name: 'Owned Turf' });
+      const owner = await createUser(ctx.prisma, { role: 'TURF_OWNER', tenantId: tenant.id });
+      const token = ctx.sign({ sub: owner.id, role: 'TURF_OWNER', tenantId: tenant.id });
+      const res = await request(ctx.server())
+        .get(`/v1/tenants/${tenant.id}`)
+        .set(...ctx.auth(token));
+      expect(res.status).toBe(200);
+      expect(res.body.data.name).toBe('Owned Turf');
     });
 
-    it('returns 403 for non-owner', async () => {
-      prisma.tenant.findUnique.mockResolvedValue({ id: 't1' });
-      const token = await jwtService.signAsync(
-        { sub: 'u2', role: 'TURF_OWNER', tenantId: 't2' },
-        { secret: 'dev-access-secret-change-in-production-32', expiresIn: '15m' },
-      );
-      return request(app.getHttpServer())
-        .get('/v1/tenants/t1')
-        .set('Authorization', `Bearer ${token}`)
-        .expect(403);
+    it('returns 403 for a different tenant (isolation)', async () => {
+      const tenantA = await createTenant(ctx.prisma);
+      const token = ctx.sign({ sub: 'other', role: 'TURF_OWNER', tenantId: 'some-other-tenant' });
+      const res = await request(ctx.server())
+        .get(`/v1/tenants/${tenantA.id}`)
+        .set(...ctx.auth(token));
+      expect(res.status).toBe(403);
     });
   });
 
   describe('DELETE /v1/tenants/:id', () => {
-    it('returns 403 for non-admin', async () => {
-      const token = await ownerToken();
-      return request(app.getHttpServer())
-        .delete('/v1/tenants/t1')
-        .set('Authorization', `Bearer ${token}`)
-        .expect(403);
+    it('returns 403 for a non-admin', async () => {
+      const tenant = await createTenant(ctx.prisma);
+      const owner = await createUser(ctx.prisma, { role: 'TURF_OWNER', tenantId: tenant.id });
+      const token = ctx.sign({ sub: owner.id, role: 'TURF_OWNER', tenantId: tenant.id });
+      const res = await request(ctx.server())
+        .delete(`/v1/tenants/${tenant.id}`)
+        .set(...ctx.auth(token));
+      expect(res.status).toBe(403);
     });
 
-    it('deactivates for super admin', async () => {
-      prisma.tenant.findUnique.mockResolvedValue({ id: 't1' });
-      prisma.tenant.update.mockResolvedValue({ id: 't1', isActive: false });
-      const token = await adminToken();
-      return request(app.getHttpServer())
-        .delete('/v1/tenants/t1')
-        .set('Authorization', `Bearer ${token}`)
-        .expect(200)
-        .expect((res: any) => {
-          expect(res.body.data.isActive).toBe(false);
-        });
+    it('deactivates the tenant for a SUPER_ADMIN (real update)', async () => {
+      const tenant = await createTenant(ctx.prisma, { isActive: true });
+      const token = ctx.sign({ sub: 'admin', role: 'SUPER_ADMIN', tenantId: null });
+      const res = await request(ctx.server())
+        .delete(`/v1/tenants/${tenant.id}`)
+        .set(...ctx.auth(token));
+      expect(res.status).toBe(200);
+      expect(res.body.data.isActive).toBe(false);
+      const after = await ctx.prisma.tenant.findUnique({ where: { id: tenant.id } });
+      expect(after?.isActive).toBe(false);
     });
   });
 });

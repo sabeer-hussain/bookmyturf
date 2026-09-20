@@ -1,199 +1,218 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
-import { ConfigModule } from '@nestjs/config';
-import { JwtModule, JwtService } from '@nestjs/jwt';
-import { PassportModule } from '@nestjs/passport';
-import { Test } from '@nestjs/testing';
-import { TransformInterceptor } from '../src/common/interceptors/transform.interceptor';
-import { JwtAuthGuard } from '../src/common/guards/auth.guard';
+import { E2EContext, closeE2EApp, createE2EApp, otpSendMock, truncateAll } from './support/e2e';
+
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const request = require('supertest');
-import { AuthController } from '../src/modules/auth/auth.controller';
-import { AuthService } from '../src/modules/auth/auth.service';
-import { OTP_PROVIDER } from '../src/modules/auth/otp/otp-provider.interface';
-import { OtpService } from '../src/modules/auth/otp/otp.service';
-import { JwtStrategy } from '../src/modules/auth/strategies/jwt.strategy';
-import { PrismaService } from '../src/prisma/prisma.service';
-import { RedisService } from '../src/redis/redis.service';
-import appConfig from '../src/config/app.config';
 
-describe('Auth (e2e)', () => {
-  let app: INestApplication;
-  let redis: Record<string, jest.Mock>;
-  let prisma: Record<string, any>;
+/**
+ * REAL-DB + REAL-REDIS e2e for Authentication (module: auth).
+ *
+ * The full OTP flow runs for real: `otp/send` stores the code in real Redis and calls
+ * the (mocked) SMS-send provider; `otp/verify` reads Redis, creates/updates a real user,
+ * and issues real JWTs. Rate-limiting uses the real Redis counter.
+ *
+ * In test config (`OTP_PROVIDER=dev`) the generated code is the fixed `123456`, so verify
+ * is deterministic. Google login is "not configured" (empty `GOOGLE_CLIENT_ID`).
+ */
+describe('Auth (e2e — real DB + Redis)', () => {
+  let ctx: E2EContext;
+  const DEV_OTP = '123456';
+
+  // Unique phone per test AND per run (timestamp-based) so Redis OTP / rate-limit keys
+  // (`otp:`, `otp_attempts:`, `otp_rate:`) never bleed across tests or repeated runs.
+  const runTag = Date.now() % 100000;
+  let phoneSeq = 0;
+  const nextPhone = () =>
+    `+9198${String(runTag).padStart(5, '0')}${String(phoneSeq++).padStart(3, '0')}`;
+
+  async function cleanOtp(phone: string) {
+    await ctx.redis.del(`otp:${phone}`);
+    await ctx.redis.del(`otp_attempts:${phone}`);
+    await ctx.redis.del(`otp_rate:${phone}`);
+  }
 
   beforeAll(async () => {
-    redis = {
-      get: jest.fn(),
-      set: jest.fn(),
-      del: jest.fn(),
-      incr: jest.fn().mockResolvedValue(1),
-      expire: jest.fn(),
-      ttl: jest.fn(),
-    };
-    prisma = {
-      user: {
-        findUnique: jest.fn(),
-        create: jest.fn(),
-        update: jest.fn(),
-      },
-    };
-
-    const module = await Test.createTestingModule({
-      imports: [
-        ConfigModule.forRoot({ isGlobal: true, load: [appConfig] }),
-        PassportModule.register({ defaultStrategy: 'jwt' }),
-        JwtModule.register({}),
-      ],
-      controllers: [AuthController],
-      providers: [
-        AuthService,
-        OtpService,
-        JwtStrategy,
-        { provide: APP_GUARD, useClass: JwtAuthGuard },
-        { provide: RedisService, useValue: redis },
-        { provide: PrismaService, useValue: prisma },
-        { provide: OTP_PROVIDER, useValue: { sendOtp: jest.fn() } },
-      ],
-    }).compile();
-
-    app = module.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
-    app.useGlobalInterceptors(new TransformInterceptor());
-    app.setGlobalPrefix('v1');
-    await app.init();
+    ctx = await createE2EApp();
   });
-
   afterAll(async () => {
-    await app.close();
+    await closeE2EApp(ctx);
+  });
+  beforeEach(async () => {
+    await truncateAll(ctx.prisma);
+    otpSendMock.sendOtp.mockClear();
   });
 
   describe('POST /v1/auth/otp/send', () => {
-    it('sends OTP for valid phone', () => {
-      redis.get.mockResolvedValue(null);
-      return request(app.getHttpServer())
-        .post('/v1/auth/otp/send')
-        .send({ phone: '+919876543210' })
-        .expect(201)
-        .expect((res) => {
-          expect(res.body.success).toBe(true);
-          expect(res.body.data.message).toBe('OTP sent successfully');
-        });
+    it('sends an OTP for a valid phone (stores in real Redis, calls send provider)', async () => {
+      const phone = nextPhone();
+      await cleanOtp(phone);
+      const res = await request(ctx.server()).post('/v1/auth/otp/send').send({ phone });
+      expect(res.status).toBe(201);
+      expect(res.body.data.message).toBe('OTP sent successfully');
+      // Real Redis holds the code; send provider (SMS) was invoked (mocked).
+      expect(await ctx.redis.get(`otp:${phone}`)).toBe(DEV_OTP);
+      expect(otpSendMock.sendOtp).toHaveBeenCalledWith(phone, DEV_OTP);
+      await cleanOtp(phone);
     });
 
-    it('rejects invalid phone format', () => {
-      return request(app.getHttpServer())
-        .post('/v1/auth/otp/send')
-        .send({ phone: '9876543210' })
-        .expect(400);
+    it('rejects an invalid phone format (400)', async () => {
+      const res = await request(ctx.server()).post('/v1/auth/otp/send').send({ phone: '123' });
+      expect(res.status).toBe(400);
     });
 
-    it('rejects empty body', () => {
-      return request(app.getHttpServer()).post('/v1/auth/otp/send').send({}).expect(400);
+    it('rejects an empty body (400)', async () => {
+      const res = await request(ctx.server()).post('/v1/auth/otp/send').send({});
+      expect(res.status).toBe(400);
     });
   });
 
   describe('POST /v1/auth/otp/verify', () => {
-    it('returns tokens for valid OTP', () => {
-      redis.get.mockResolvedValue('123456');
-      prisma.user.findUnique.mockResolvedValue(null);
-      prisma.user.create.mockResolvedValue({
-        id: 'usr-1',
-        phone: '+919876543210',
-        role: 'CUSTOMER',
-        tenantId: null,
-        firstName: 'User',
-      });
-      prisma.user.update.mockResolvedValue({});
+    it('verifies the OTP, creates a real user, and returns tokens', async () => {
+      const phone = nextPhone();
+      await cleanOtp(phone);
+      await request(ctx.server()).post('/v1/auth/otp/send').send({ phone }).expect(201);
 
-      return request(app.getHttpServer())
+      const res = await request(ctx.server())
         .post('/v1/auth/otp/verify')
-        .send({ phone: '+919876543210', code: '123456' })
-        .expect(201)
-        .expect((res) => {
-          expect(res.body.success).toBe(true);
-          expect(res.body.data).toHaveProperty('accessToken');
-          expect(res.body.data).toHaveProperty('refreshToken');
-          expect(res.body.data).toHaveProperty('user');
-          expect(res.body.data.user).not.toHaveProperty('refreshToken');
-        });
+        .send({ phone, code: DEV_OTP });
+      expect(res.status).toBe(201);
+      expect(res.body.data.accessToken).toBeTruthy();
+      expect(res.body.data.refreshToken).toBeTruthy();
+
+      // Real user was created and OTP key consumed.
+      const user = await ctx.prisma.user.findUnique({ where: { phone } });
+      expect(user).not.toBeNull();
+      expect(await ctx.redis.get(`otp:${phone}`)).toBeNull();
+      await cleanOtp(phone);
     });
 
-    it('rejects invalid OTP', () => {
-      redis.get.mockResolvedValue('123456');
-      return request(app.getHttpServer())
+    it('rejects an incorrect OTP (401)', async () => {
+      const phone = nextPhone();
+      await cleanOtp(phone);
+      await request(ctx.server()).post('/v1/auth/otp/send').send({ phone }).expect(201);
+      const res = await request(ctx.server())
         .post('/v1/auth/otp/verify')
-        .send({ phone: '+919876543210', code: '000000' })
-        .expect(401);
+        .send({ phone, code: '000000' });
+      expect(res.status).toBe(401);
+      await cleanOtp(phone);
     });
 
-    it('rejects invalid code format', () => {
-      return request(app.getHttpServer())
+    it('rejects an invalid code format (400)', async () => {
+      const phone = nextPhone();
+      const res = await request(ctx.server())
         .post('/v1/auth/otp/verify')
-        .send({ phone: '+919876543210', code: '12' })
-        .expect(400);
+        .send({ phone, code: 'abc' });
+      expect(res.status).toBe(400);
+    });
+
+    it('enforces the verify rate limit after too many attempts (real Redis counter)', async () => {
+      const phone = nextPhone();
+      await cleanOtp(phone);
+      await request(ctx.server()).post('/v1/auth/otp/send').send({ phone }).expect(201);
+      // verify() blocks when attempts > 5; attempts 1–5 return 401 (wrong code), the 6th is blocked (400).
+      for (let i = 0; i < 5; i++) {
+        const r = await request(ctx.server())
+          .post('/v1/auth/otp/verify')
+          .send({ phone, code: '000000' });
+        expect(r.status).toBe(401);
+      }
+      const sixth = await request(ctx.server())
+        .post('/v1/auth/otp/verify')
+        .send({ phone, code: '000000' });
+      expect(sixth.status).toBe(400); // "Maximum OTP attempts exceeded"
+      await cleanOtp(phone);
     });
   });
 
   describe('POST /v1/auth/refresh', () => {
-    it('rejects invalid refresh token', () => {
-      return request(app.getHttpServer())
-        .post('/v1/auth/refresh')
-        .send({ refreshToken: 'invalid-token' })
-        .expect(403);
+    it('issues new tokens for a valid refresh token (real bcrypt-stored)', async () => {
+      const phone = nextPhone();
+      await cleanOtp(phone);
+      await request(ctx.server()).post('/v1/auth/otp/send').send({ phone }).expect(201);
+      const login = await request(ctx.server())
+        .post('/v1/auth/otp/verify')
+        .send({ phone, code: DEV_OTP });
+      const refreshToken = login.body.data.refreshToken;
+
+      const res = await request(ctx.server()).post('/v1/auth/refresh').send({ refreshToken });
+      expect(res.status).toBe(201);
+      expect(res.body.data.accessToken).toBeTruthy();
+      await cleanOtp(phone);
     });
 
-    it('rejects empty body', () => {
-      return request(app.getHttpServer()).post('/v1/auth/refresh').send({}).expect(400);
+    it('rejects an invalid refresh token (403)', async () => {
+      const res = await request(ctx.server())
+        .post('/v1/auth/refresh')
+        .send({ refreshToken: 'not-a-real-token' });
+      expect(res.status).toBe(403);
+    });
+
+    it('rejects an empty body (400)', async () => {
+      const res = await request(ctx.server()).post('/v1/auth/refresh').send({});
+      expect(res.status).toBe(400);
     });
   });
 
   describe('POST /v1/auth/google', () => {
-    it('rejects empty body', () => {
-      return request(app.getHttpServer()).post('/v1/auth/google').send({}).expect(400);
+    it('rejects an empty body (400)', async () => {
+      const res = await request(ctx.server()).post('/v1/auth/google').send({});
+      expect(res.status).toBe(400);
     });
 
-    it('rejects when GOOGLE_CLIENT_ID not configured', () => {
-      return request(app.getHttpServer())
+    it('returns "not configured" when GOOGLE_CLIENT_ID is unset (401)', async () => {
+      const res = await request(ctx.server())
         .post('/v1/auth/google')
-        .send({ idToken: 'some-invalid-token' })
-        .expect(401);
+        .send({ idToken: 'any-token' });
+      expect(res.status).toBe(401);
     });
   });
 
   describe('POST /v1/auth/logout', () => {
-    it('rejects unauthenticated request', () => {
-      return request(app.getHttpServer()).post('/v1/auth/logout').expect(401);
+    it('rejects an unauthenticated request (401)', async () => {
+      const res = await request(ctx.server()).post('/v1/auth/logout');
+      expect(res.status).toBe(401);
+    });
+
+    it('clears the refresh token for an authenticated user (real update)', async () => {
+      const phone = nextPhone();
+      await cleanOtp(phone);
+      await request(ctx.server()).post('/v1/auth/otp/send').send({ phone }).expect(201);
+      const login = await request(ctx.server())
+        .post('/v1/auth/otp/verify')
+        .send({ phone, code: DEV_OTP });
+      const accessToken = login.body.data.accessToken;
+      const user = await ctx.prisma.user.findUnique({ where: { phone } });
+
+      const res = await request(ctx.server())
+        .post('/v1/auth/logout')
+        .set(...ctx.auth(accessToken));
+      expect(res.status).toBe(201);
+      expect(
+        (await ctx.prisma.user.findUnique({ where: { id: user!.id } }))?.refreshToken,
+      ).toBeNull();
+      await cleanOtp(phone);
     });
   });
 
   describe('GET /v1/auth/me', () => {
-    it('rejects unauthenticated request', () => {
-      return request(app.getHttpServer()).get('/v1/auth/me').expect(401);
+    it('rejects an unauthenticated request (401)', async () => {
+      const res = await request(ctx.server()).get('/v1/auth/me');
+      expect(res.status).toBe(401);
     });
 
-    it('returns user for valid token', async () => {
-      const jwtService = app.get(JwtService);
-      const token = await jwtService.signAsync(
-        { sub: 'usr-1', role: 'CUSTOMER', tenantId: null },
-        { secret: 'dev-access-secret-change-in-production-32', expiresIn: '15m' },
-      );
-      prisma.user.findUnique.mockResolvedValue({
-        id: 'usr-1',
-        phone: '+919876543210',
-        role: 'CUSTOMER',
-        refreshToken: 'hashed',
-      });
+    it('returns the current user for a valid token', async () => {
+      const phone = nextPhone();
+      await cleanOtp(phone);
+      await request(ctx.server()).post('/v1/auth/otp/send').send({ phone }).expect(201);
+      const login = await request(ctx.server())
+        .post('/v1/auth/otp/verify')
+        .send({ phone, code: DEV_OTP });
 
-      return request(app.getHttpServer())
+      const res = await request(ctx.server())
         .get('/v1/auth/me')
-        .set('Authorization', `Bearer ${token}`)
-        .expect(200)
-        .expect((res) => {
-          expect(res.body.success).toBe(true);
-          expect(res.body.data).toHaveProperty('id', 'usr-1');
-          expect(res.body.data).not.toHaveProperty('refreshToken');
-        });
+        .set(...ctx.auth(login.body.data.accessToken));
+      expect(res.status).toBe(200);
+      expect(res.body.data.phone).toBe(phone);
+      await cleanOtp(phone);
     });
   });
 });

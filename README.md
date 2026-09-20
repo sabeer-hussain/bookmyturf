@@ -163,7 +163,11 @@ pnpm dev          # Start all apps in dev mode
 pnpm build        # Build all apps
 pnpm lint         # Lint all apps
 pnpm type-check   # TypeScript check
-pnpm test         # Run tests
+pnpm test         # Run unit tests
 docker-compose up -d   # Start DB + Redis
 docker-compose down    # Stop DB + Redis
 ```
+
+> **Running e2e tests:** the API e2e suite runs against a dedicated `bookmyturf_test` database.
+> Copy `apps/api/.env.test.example` to `apps/api/.env.test`, then run `pnpm --filter @bookmyturf/api test:e2e`.
+> See **CONTRIBUTING → Real-database e2e tests** for details.

@@ -10,9 +10,8 @@ jobs:
   ci:
     runs-on: ubuntu-latest
 
-    # Service containers for the real-database integration tests (issue #31).
-    # The slots integration e2e boots the full AppModule, which connects to both
-    # PostgreSQL and Redis on startup.
+    # Service containers for the real-database e2e suite. The e2e specs boot the full
+    # AppModule, which connects to both PostgreSQL and Redis on startup.
     services:
       postgres:
         image: postgres:16
@@ -38,8 +37,9 @@ jobs:
           --health-retries 5
 
     env:
-      # Test-only, non-production values. Used by both unit and e2e steps.
-      DATABASE_URL: postgresql://bookmyturf:bookmyturf_dev@localhost:5432/bookmyturf?schema=public
+      # Test-only, non-production values. Unit + build use these; e2e loads .env.test
+      # (created below) via `dotenv -e .env.test`, which points at the dedicated test DB.
+      DATABASE_URL: postgresql://bookmyturf:bookmyturf_dev@localhost:5432/bookmyturf_test?schema=public
       REDIS_HOST: localhost
       REDIS_PORT: 6379
       JWT_ACCESS_SECRET: dev-access-secret-change-in-production-32
@@ -72,6 +72,10 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # e2e loads apps/api/.env.test via dotenv-cli; create it from the committed example.
+      - name: Prepare e2e test env
+        run: cp apps/api/.env.test.example apps/api/.env.test
+
       - name: Migrate + seed test database
         run: |
           pnpm --filter @bookmyturf/api exec prisma migrate deploy
@@ -80,5 +84,5 @@ jobs:
       - name: Test (unit)
         run: pnpm test
 
-      - name: Test (e2e — includes real-DB slot integration)
+      - name: Test (e2e — real Postgres + Redis)
         run: pnpm --filter @bookmyturf/api test:e2e
