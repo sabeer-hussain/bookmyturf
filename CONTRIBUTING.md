@@ -173,11 +173,42 @@
 ### Testing
 
 - Unit + integration tests alongside each feature (same PR)
-- Backend: Jest + Supertest
+- Backend: Jest (unit) + Supertest (e2e)
 - Frontend: Vitest + Testing Library
 - All tests must pass before merge
 - Manual end-to-end verification before marking complete
 - Test every feature works visually end-to-end
+
+#### Real-database e2e tests
+
+E2E specs (`apps/api/test/*.e2e-spec.ts`) run against a **real** PostgreSQL + Redis — not mocks —
+so SQL, constraints, transactions, and tenant isolation are genuinely verified. Only true external
+I/O boundaries are mocked (S3 uploads, OTP SMS-send, Google token verification).
+
+- **Dedicated test DB:** a separate `bookmyturf_test` database keeps e2e runs from touching dev data.
+  Config lives in `apps/api/.env.test` (copy from `.env.test.example`), loaded via `dotenv-cli`.
+- **Run:** `pnpm --filter @bookmyturf/api test:e2e`
+  (= `dotenv -e .env.test -- jest --config ./test/jest-e2e.json --runInBand`).
+  `--runInBand` is required — all specs share one DB, so they must run serially (parallel workers
+  would truncate each other's data).
+- **First-time local setup:**
+  ```bash
+  docker-compose up -d
+  cd apps/api && cp .env.test.example .env.test
+  DATABASE_URL="postgresql://bookmyturf:bookmyturf_dev@localhost:5432/bookmyturf_test?schema=public" \
+    pnpm exec prisma migrate deploy && \
+  DATABASE_URL="postgresql://bookmyturf:bookmyturf_dev@localhost:5432/bookmyturf_test?schema=public" \
+    pnpm exec prisma db seed
+  ```
+- **Shared harness** (`test/support/e2e.ts` + `test/support/seed.ts`):
+  - `createE2EApp()` — boots the full `AppModule`, overrides `UPLOAD_PROVIDER` + `OTP_PROVIDER`
+    with mocks, returns `{ app, prisma, jwt, redis, sign, server, auth }`.
+  - `truncateAll(prisma)` — truncates tenant-scoped tables (preserves seeded plans/sports).
+  - seed factories — `createTenant`, `createUser`, `createPlan`, `createSubscription`,
+    `seedTenantWithPlan`, `createVenue`, `createCourt`, `anySport`.
+  - Per-spec shape: `beforeAll → createE2EApp`, `afterAll → closeE2EApp`, `beforeEach → truncateAll`.
+- **OTP in tests:** `OTP_PROVIDER=dev` yields the fixed code `123456`; the OTP is stored in real
+  Redis and the SMS-send is mocked, so the full send→verify flow runs deterministically.
 
 ### Documentation
 

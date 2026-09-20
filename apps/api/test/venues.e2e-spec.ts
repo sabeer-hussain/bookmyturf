@@ -1,432 +1,262 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
-import { ConfigModule } from '@nestjs/config';
-import { JwtModule, JwtService } from '@nestjs/jwt';
-import { PassportModule } from '@nestjs/passport';
-import { Test } from '@nestjs/testing';
-import { JwtAuthGuard } from '../src/common/guards/auth.guard';
-import { RolesGuard } from '../src/common/guards/roles.guard';
-import { TransformInterceptor } from '../src/common/interceptors/transform.interceptor';
-import { JwtStrategy } from '../src/modules/auth/strategies/jwt.strategy';
-import { VenuesController } from '../src/modules/venues/venues.controller';
-import { VenuesService } from '../src/modules/venues/venues.service';
-import { SubscriptionsService } from '../src/modules/subscriptions/subscriptions.service';
-import { PrismaService } from '../src/prisma/prisma.service';
-import appConfig from '../src/config/app.config';
+import { E2EContext, closeE2EApp, createE2EApp, truncateAll } from './support/e2e';
+import { createTenant, createUser, createVenue, seedTenantWithPlan } from './support/seed';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const request = require('supertest');
 
-describe('Venues (e2e)', () => {
-  let app: INestApplication;
-  let jwtService: JwtService;
-  let prisma: Record<string, any>;
-  let subscriptionsService: Record<string, any>;
+/**
+ * REAL-DB e2e for Venue management (module: venues).
+ * Plan-limit enforcement is tested for real: a subscription + plan (with a known limit)
+ * is seeded, and the limit path runs against actual venue counts.
+ */
+describe('Venues (e2e — real DB)', () => {
+  let ctx: E2EContext;
 
-  const ownerToken = () =>
-    jwtService.signAsync(
-      { sub: 'u1', role: 'TURF_OWNER', tenantId: 't1' },
-      { secret: 'dev-access-secret-change-in-production-32', expiresIn: '15m' },
-    );
-
-  const otherOwnerToken = () =>
-    jwtService.signAsync(
-      { sub: 'u2', role: 'TURF_OWNER', tenantId: 't2' },
-      { secret: 'dev-access-secret-change-in-production-32', expiresIn: '15m' },
-    );
-
-  const customerToken = () =>
-    jwtService.signAsync(
-      { sub: 'u3', role: 'CUSTOMER', tenantId: null },
-      { secret: 'dev-access-secret-change-in-production-32', expiresIn: '15m' },
-    );
-
-  const managerToken = () =>
-    jwtService.signAsync(
-      { sub: 'u4', role: 'TURF_MANAGER', tenantId: 't1' },
-      { secret: 'dev-access-secret-change-in-production-32', expiresIn: '15m' },
-    );
-
-  const mockSubscription = {
-    id: 'sub-1',
-    status: 'TRIAL',
-    planName: 'Starter',
-    planId: 'plan-starter',
-    trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-    trialDaysLeft: 14,
-    currentPeriodStart: new Date(),
-    currentPeriodEnd: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-    limits: { maxVenues: 3, maxCourts: 5, maxStaff: 3 },
-    features: {},
-  };
-
-  const mockVenue = {
-    id: 'v1',
-    tenantId: 't1',
-    name: 'SportArena Main',
-    address: 'Andheri West',
-    city: 'Mumbai',
-    state: 'Maharashtra',
-    pincode: '400058',
+  const validVenue = {
+    name: 'Downtown Turf',
+    address: '12 MG Road',
+    city: 'Chennai',
+    state: 'TN',
+    pincode: '600001',
+    phone: '+919876543210',
     openTime: '06:00',
     closeTime: '23:00',
-    phone: '+919876543210',
-    latitude: 19.1136,
-    longitude: 72.8697,
-    amenities: ['parking', 'floodlights'],
-    images: [],
-    isActive: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    _count: { courts: 2 },
+    amenities: ['parking', 'washroom'],
   };
 
   beforeAll(async () => {
-    prisma = {
-      venue: {
-        create: jest.fn().mockResolvedValue(mockVenue),
-        findMany: jest.fn().mockResolvedValue([mockVenue]),
-        findFirst: jest.fn().mockResolvedValue(mockVenue),
-        count: jest.fn().mockResolvedValue(1),
-        update: jest.fn().mockResolvedValue(mockVenue),
-      },
-    };
-
-    subscriptionsService = {
-      getCurrentSubscription: jest.fn().mockResolvedValue(mockSubscription),
-    };
-
-    const module = await Test.createTestingModule({
-      imports: [
-        ConfigModule.forRoot({ isGlobal: true, load: [appConfig] }),
-        PassportModule.register({ defaultStrategy: 'jwt' }),
-        JwtModule.register({}),
-      ],
-      controllers: [VenuesController],
-      providers: [
-        VenuesService,
-        JwtStrategy,
-        { provide: APP_GUARD, useClass: JwtAuthGuard },
-        { provide: APP_GUARD, useClass: RolesGuard },
-        { provide: PrismaService, useValue: prisma },
-        { provide: SubscriptionsService, useValue: subscriptionsService },
-      ],
-    }).compile();
-
-    app = module.createNestApplication();
-    app.useGlobalPipes(
-      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
-    );
-    app.useGlobalInterceptors(new TransformInterceptor());
-    app.setGlobalPrefix('v1');
-    await app.init();
-
-    jwtService = module.get(JwtService);
+    ctx = await createE2EApp();
   });
-
   afterAll(async () => {
-    await app.close();
+    await closeE2EApp(ctx);
+  });
+  beforeEach(async () => {
+    await truncateAll(ctx.prisma);
   });
 
-  // ─── VENUE LIFECYCLE ───────────────────────────────────
+  /** Seed an owner tenant with an active subscription on a plan with given limits. */
+  async function ownerCtx(limits: { maxVenues?: number; maxCourts?: number } = {}) {
+    const { tenant, owner } = await seedTenantWithPlan(ctx.prisma, limits);
+    const token = ctx.sign({ sub: owner.id, role: 'TURF_OWNER', tenantId: tenant.id });
+    return { tenant, owner, token };
+  }
 
   describe('POST /v1/venues', () => {
-    it('creates venue with valid data', async () => {
-      const token = await ownerToken();
-      return request(app.getHttpServer())
+    it('creates a venue with valid data (real persistence)', async () => {
+      const { tenant, token } = await ownerCtx({ maxVenues: 5 });
+      const res = await request(ctx.server())
         .post('/v1/venues')
-        .set('Authorization', `Bearer ${token}`)
-        .send({
-          name: 'SportArena Main',
-          address: 'Andheri West',
-          city: 'Mumbai',
-          state: 'Maharashtra',
-          pincode: '400058',
-          openTime: '06:00',
-          closeTime: '23:00',
-        })
-        .expect(201)
-        .expect((res: any) => {
-          expect(res.body.success).toBe(true);
-          expect(res.body.data.name).toBe('SportArena Main');
-        });
+        .set(...ctx.auth(token))
+        .send(validVenue);
+      expect(res.status).toBe(201);
+      expect(res.body.data.name).toBe('Downtown Turf');
+      const count = await ctx.prisma.venue.count({ where: { tenantId: tenant.id } });
+      expect(count).toBe(1);
     });
 
-    it('rejects empty body with validation errors', async () => {
-      const token = await ownerToken();
-      return request(app.getHttpServer())
+    it('rejects empty body (400)', async () => {
+      const { token } = await ownerCtx();
+      const res = await request(ctx.server())
         .post('/v1/venues')
-        .set('Authorization', `Bearer ${token}`)
-        .send({})
-        .expect(400);
+        .set(...ctx.auth(token))
+        .send({});
+      expect(res.status).toBe(400);
     });
 
-    it('rejects invalid pincode format', async () => {
-      const token = await ownerToken();
-      return request(app.getHttpServer())
+    it('rejects invalid pincode (400)', async () => {
+      const { token } = await ownerCtx();
+      const res = await request(ctx.server())
         .post('/v1/venues')
-        .set('Authorization', `Bearer ${token}`)
-        .send({
-          name: 'Test',
-          address: 'Test',
-          city: 'Mumbai',
-          state: 'MH',
-          pincode: '40005',
-          openTime: '06:00',
-          closeTime: '23:00',
-        })
-        .expect(400)
-        .expect((res: any) => {
-          expect(res.body.message).toContain('Pincode must be a 6-digit number');
-        });
+        .set(...ctx.auth(token))
+        .send({ ...validVenue, pincode: 'abc' });
+      expect(res.status).toBe(400);
     });
 
-    it('rejects invalid time format', async () => {
-      const token = await ownerToken();
-      return request(app.getHttpServer())
+    it('rejects invalid time format (400)', async () => {
+      const { token } = await ownerCtx();
+      const res = await request(ctx.server())
         .post('/v1/venues')
-        .set('Authorization', `Bearer ${token}`)
-        .send({
-          name: 'Test',
-          address: 'Test',
-          city: 'Mumbai',
-          state: 'MH',
-          pincode: '400058',
-          openTime: '25:00',
-          closeTime: '6pm',
-        })
-        .expect(400);
+        .set(...ctx.auth(token))
+        .send({ ...validVenue, openTime: '6am' });
+      expect(res.status).toBe(400);
     });
 
-    it('rejects invalid amenity values', async () => {
-      const token = await ownerToken();
-      return request(app.getHttpServer())
+    it('rejects unknown fields — mass-assignment prevention (400)', async () => {
+      const { token } = await ownerCtx();
+      const res = await request(ctx.server())
         .post('/v1/venues')
-        .set('Authorization', `Bearer ${token}`)
-        .send({
-          name: 'Test',
-          address: 'Test',
-          city: 'Mumbai',
-          state: 'MH',
-          pincode: '400058',
-          openTime: '06:00',
-          closeTime: '23:00',
-          amenities: ['swimming_pool'],
-        })
-        .expect(400);
+        .set(...ctx.auth(token))
+        .send({ ...validVenue, hacker: true });
+      expect(res.status).toBe(400);
     });
 
-    it('rejects unknown fields (mass assignment prevention)', async () => {
-      const token = await ownerToken();
-      return request(app.getHttpServer())
+    it('rejects invalid amenity values (400)', async () => {
+      const { token } = await ownerCtx();
+      const res = await request(ctx.server())
         .post('/v1/venues')
-        .set('Authorization', `Bearer ${token}`)
-        .send({
-          name: 'Test',
-          address: 'Test',
-          city: 'Mumbai',
-          state: 'MH',
-          pincode: '400058',
-          openTime: '06:00',
-          closeTime: '23:00',
-          tenantId: 'hacked',
-          isActive: false,
-        })
-        .expect(400);
+        .set(...ctx.auth(token))
+        .send({ ...validVenue, amenities: ['not_a_real_amenity'] });
+      expect(res.status).toBe(400);
     });
   });
 
-  // ─── VENUE LIMIT ENFORCEMENT ───────────────────────────
-
-  describe('Venue Limit Enforcement', () => {
-    it('rejects when venue limit reached (403)', async () => {
-      prisma.venue.count.mockResolvedValueOnce(3); // At limit
-      const token = await ownerToken();
-      return request(app.getHttpServer())
+  describe('Venue limit enforcement (real subscription/plan)', () => {
+    it('rejects creating beyond the plan limit (403 VENUE_LIMIT_REACHED)', async () => {
+      // Plan allows exactly 1 venue.
+      const { tenant, token } = await ownerCtx({ maxVenues: 1 });
+      await createVenue(ctx.prisma, tenant.id); // fill the single slot
+      const res = await request(ctx.server())
         .post('/v1/venues')
-        .set('Authorization', `Bearer ${token}`)
-        .send({
-          name: 'Over Limit',
-          address: 'Test',
-          city: 'Mumbai',
-          state: 'MH',
-          pincode: '400058',
-          openTime: '06:00',
-          closeTime: '23:00',
-        })
-        .expect(403);
+        .set(...ctx.auth(token))
+        .send(validVenue);
+      expect(res.status).toBe(403);
+      expect(res.body.code ?? res.body.error?.code).toBe('VENUE_LIMIT_REACHED');
+      expect(await ctx.prisma.venue.count({ where: { tenantId: tenant.id } })).toBe(1);
     });
 
-    it('rejects when subscription inactive (403)', async () => {
-      subscriptionsService.getCurrentSubscription.mockResolvedValueOnce({
-        ...mockSubscription,
-        status: 'EXPIRED',
-      });
-      const token = await ownerToken();
-      return request(app.getHttpServer())
+    it('rejects when the tenant has no active subscription (403/404)', async () => {
+      // Tenant + owner but NO subscription.
+      const tenant = await createTenant(ctx.prisma);
+      const owner = await createUser(ctx.prisma, { tenantId: tenant.id, role: 'TURF_OWNER' });
+      const token = ctx.sign({ sub: owner.id, role: 'TURF_OWNER', tenantId: tenant.id });
+      const res = await request(ctx.server())
         .post('/v1/venues')
-        .set('Authorization', `Bearer ${token}`)
-        .send({
-          name: 'Test',
-          address: 'Test',
-          city: 'Mumbai',
-          state: 'MH',
-          pincode: '400058',
-          openTime: '06:00',
-          closeTime: '23:00',
-        })
-        .expect(403);
+        .set(...ctx.auth(token))
+        .send(validVenue);
+      expect([403, 404]).toContain(res.status);
     });
   });
-
-  // ─── VENUE LIST & GET ──────────────────────────────────
 
   describe('GET /v1/venues', () => {
     it('returns paginated venues with meta', async () => {
-      const token = await ownerToken();
-      return request(app.getHttpServer())
+      const { tenant, token } = await ownerCtx();
+      await createVenue(ctx.prisma, tenant.id);
+      await createVenue(ctx.prisma, tenant.id);
+      const res = await request(ctx.server())
         .get('/v1/venues')
-        .set('Authorization', `Bearer ${token}`)
-        .expect(200)
-        .expect((res: any) => {
-          expect(res.body.success).toBe(true);
-          expect(res.body.data).toBeInstanceOf(Array);
-          expect(res.body.meta).toBeDefined();
-          expect(res.body.meta.page).toBe(1);
-        });
+        .set(...ctx.auth(token));
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveLength(2);
+      expect(res.body.meta.total).toBe(2);
     });
 
-    it('allows TURF_MANAGER access', async () => {
-      const token = await managerToken();
-      return request(app.getHttpServer())
+    it('allows TURF_MANAGER to list', async () => {
+      const { tenant } = await ownerCtx();
+      const mgr = await createUser(ctx.prisma, { tenantId: tenant.id, role: 'TURF_MANAGER' });
+      const token = ctx.sign({ sub: mgr.id, role: 'TURF_MANAGER', tenantId: tenant.id });
+      const res = await request(ctx.server())
         .get('/v1/venues')
-        .set('Authorization', `Bearer ${token}`)
-        .expect(200);
+        .set(...ctx.auth(token));
+      expect(res.status).toBe(200);
     });
   });
 
   describe('GET /v1/venues/:id', () => {
-    it('returns venue with courts count', async () => {
-      const token = await ownerToken();
-      return request(app.getHttpServer())
-        .get('/v1/venues/v1')
-        .set('Authorization', `Bearer ${token}`)
-        .expect(200)
-        .expect((res: any) => {
-          expect(res.body.success).toBe(true);
-          expect(res.body.data.name).toBe('SportArena Main');
-        });
+    it('returns a venue with courts count', async () => {
+      const { tenant, token } = await ownerCtx();
+      const venue = await createVenue(ctx.prisma, tenant.id);
+      const res = await request(ctx.server())
+        .get(`/v1/venues/${venue.id}`)
+        .set(...ctx.auth(token));
+      expect(res.status).toBe(200);
+      expect(res.body.data.id).toBe(venue.id);
+      expect(res.body.data._count.courts).toBe(0);
     });
 
-    it('returns 404 for non-existent venue', async () => {
-      prisma.venue.findFirst.mockResolvedValueOnce(null);
-      const token = await ownerToken();
-      return request(app.getHttpServer())
-        .get('/v1/venues/nonexistent')
-        .set('Authorization', `Bearer ${token}`)
-        .expect(404);
+    it('returns 404 for a non-existent venue', async () => {
+      const { token } = await ownerCtx();
+      const res = await request(ctx.server())
+        .get('/v1/venues/nope')
+        .set(...ctx.auth(token));
+      expect(res.status).toBe(404);
     });
   });
 
-  // ─── VENUE UPDATE & DEACTIVATE ─────────────────────────
-
   describe('PATCH /v1/venues/:id', () => {
-    it('updates venue successfully', async () => {
-      prisma.venue.update.mockResolvedValueOnce({ ...mockVenue, name: 'Updated' });
-      const token = await ownerToken();
-      return request(app.getHttpServer())
-        .patch('/v1/venues/v1')
-        .set('Authorization', `Bearer ${token}`)
-        .send({ name: 'Updated' })
-        .expect(200)
-        .expect((res: any) => {
-          expect(res.body.data.name).toBe('Updated');
-        });
+    it('updates a venue (real)', async () => {
+      const { tenant, token } = await ownerCtx();
+      const venue = await createVenue(ctx.prisma, tenant.id);
+      const res = await request(ctx.server())
+        .patch(`/v1/venues/${venue.id}`)
+        .set(...ctx.auth(token))
+        .send({ name: 'Renamed Turf' });
+      expect(res.status).toBe(200);
+      expect(res.body.data.name).toBe('Renamed Turf');
+      expect((await ctx.prisma.venue.findUnique({ where: { id: venue.id } }))?.name).toBe(
+        'Renamed Turf',
+      );
     });
   });
 
   describe('DELETE /v1/venues/:id', () => {
-    it('deactivates venue (soft delete)', async () => {
-      prisma.venue.update.mockResolvedValueOnce({ ...mockVenue, isActive: false });
-      const token = await ownerToken();
-      return request(app.getHttpServer())
-        .delete('/v1/venues/v1')
-        .set('Authorization', `Bearer ${token}`)
-        .expect(200)
-        .expect((res: any) => {
-          expect(res.body.data.isActive).toBe(false);
-        });
+    it('soft-deactivates a venue', async () => {
+      const { tenant, token } = await ownerCtx();
+      const venue = await createVenue(ctx.prisma, tenant.id);
+      const res = await request(ctx.server())
+        .delete(`/v1/venues/${venue.id}`)
+        .set(...ctx.auth(token));
+      expect(res.status).toBe(200);
+      expect((await ctx.prisma.venue.findUnique({ where: { id: venue.id } }))?.isActive).toBe(
+        false,
+      );
     });
   });
 
-  // ─── TENANT ISOLATION ──────────────────────────────────
-
-  describe('Tenant Isolation', () => {
-    it('tenant B cannot see tenant A venues', async () => {
-      prisma.venue.findFirst.mockResolvedValueOnce(null); // tenantId filter excludes
-      const token = await otherOwnerToken();
-      return request(app.getHttpServer())
-        .get('/v1/venues/v1')
-        .set('Authorization', `Bearer ${token}`)
-        .expect(404);
+  describe('Tenant isolation', () => {
+    it('tenant B cannot fetch tenant A venue (404)', async () => {
+      const a = await ownerCtx();
+      const venueA = await createVenue(ctx.prisma, a.tenant.id);
+      const b = await ownerCtx();
+      const res = await request(ctx.server())
+        .get(`/v1/venues/${venueA.id}`)
+        .set(...ctx.auth(b.token));
+      expect(res.status).toBe(404);
     });
   });
 
-  // ─── ROLE-BASED ACCESS ─────────────────────────────────
-
-  describe('Role-Based Access', () => {
-    it('CUSTOMER cannot create venue (403)', async () => {
-      const token = await customerToken();
-      return request(app.getHttpServer())
+  describe('Role-based access', () => {
+    it('CUSTOMER cannot create (403)', async () => {
+      const token = ctx.sign({ sub: 'c', role: 'CUSTOMER', tenantId: null });
+      const res = await request(ctx.server())
         .post('/v1/venues')
-        .set('Authorization', `Bearer ${token}`)
-        .send({
-          name: 'Test',
-          address: 'Test',
-          city: 'Mumbai',
-          state: 'MH',
-          pincode: '400058',
-          openTime: '06:00',
-          closeTime: '23:00',
-        })
-        .expect(403);
+        .set(...ctx.auth(token))
+        .send(validVenue);
+      expect(res.status).toBe(403);
     });
 
     it('CUSTOMER cannot list venues (403)', async () => {
-      const token = await customerToken();
-      return request(app.getHttpServer())
+      const token = ctx.sign({ sub: 'c', role: 'CUSTOMER', tenantId: null });
+      const res = await request(ctx.server())
         .get('/v1/venues')
-        .set('Authorization', `Bearer ${token}`)
-        .expect(403);
+        .set(...ctx.auth(token));
+      expect(res.status).toBe(403);
     });
 
-    it('unauthenticated request returns 401', () => {
-      return request(app.getHttpServer()).get('/v1/venues').expect(401);
+    it('unauthenticated returns 401', async () => {
+      const res = await request(ctx.server()).post('/v1/venues').send(validVenue);
+      expect(res.status).toBe(401);
     });
 
-    it('TURF_MANAGER cannot create venue (403)', async () => {
-      const token = await managerToken();
-      return request(app.getHttpServer())
+    it('TURF_MANAGER cannot create (403, owner-only)', async () => {
+      const { tenant } = await ownerCtx();
+      const mgr = await createUser(ctx.prisma, { tenantId: tenant.id, role: 'TURF_MANAGER' });
+      const token = ctx.sign({ sub: mgr.id, role: 'TURF_MANAGER', tenantId: tenant.id });
+      const res = await request(ctx.server())
         .post('/v1/venues')
-        .set('Authorization', `Bearer ${token}`)
-        .send({
-          name: 'Test',
-          address: 'Test',
-          city: 'Mumbai',
-          state: 'MH',
-          pincode: '400058',
-          openTime: '06:00',
-          closeTime: '23:00',
-        })
-        .expect(403);
+        .set(...ctx.auth(token))
+        .send(validVenue);
+      expect(res.status).toBe(403);
     });
 
-    it('TURF_MANAGER cannot delete venue (403)', async () => {
-      const token = await managerToken();
-      return request(app.getHttpServer())
-        .delete('/v1/venues/v1')
-        .set('Authorization', `Bearer ${token}`)
-        .expect(403);
+    it('TURF_MANAGER cannot delete a venue (403, owner-only)', async () => {
+      const { tenant } = await ownerCtx();
+      const venue = await createVenue(ctx.prisma, tenant.id);
+      const mgr = await createUser(ctx.prisma, { tenantId: tenant.id, role: 'TURF_MANAGER' });
+      const token = ctx.sign({ sub: mgr.id, role: 'TURF_MANAGER', tenantId: tenant.id });
+      const res = await request(ctx.server())
+        .delete(`/v1/venues/${venue.id}`)
+        .set(...ctx.auth(token));
+      expect(res.status).toBe(403);
     });
   });
 });

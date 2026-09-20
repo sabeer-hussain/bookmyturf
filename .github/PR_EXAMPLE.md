@@ -2,11 +2,18 @@
 
 This is a real example of how PR descriptions should be written. Follow this format for all PRs.
 
+> **Note:** this is a **feature** PR (endpoints + UI), so `How to Test` uses user-facing scenarios.
+> For **non-feature** PRs (test-infra, refactor, CI, docs-only), keep the same sections but adapt:
+> make `How to Test` the commands a reviewer runs, and mark UI/inapplicable sections `N/A` with a
+> reason. The template also has two **optional** sections — **Acceptance Criteria** (map the issue's
+> criteria to status) and **Design Notes / Rationale** (non-obvious decisions and why) — include
+> them when they add value.
+
 ---
 
 ## Summary
 
-Implements tenant CRUD endpoints and Prisma-level tenant isolation using AsyncLocalStorage. Turf owners can onboard their business, get a unique slug, and start a 14-day trial.
+Implements tenant CRUD endpoints and JWT-derived tenant isolation. Turf owners can onboard their business, get a unique slug, and start a 14-day trial.
 
 Closes #11
 
@@ -30,12 +37,13 @@ Closes #11
 4. Updates user: role → TURF_OWNER, sets tenantId
 5. Creates Subscription (status: TRIAL, 14-day expiry)
 
-### Tenant Isolation (AsyncLocalStorage + Prisma)
+### Tenant Isolation (JWT-derived scoping)
 
-- TenantMiddleware extracts `X-Tenant-Id` header → stores in AsyncLocalStorage
-- Prisma `$use` middleware reads from AsyncLocalStorage per-request
-- Auto-injects `tenantId` on all queries for: Venue, Court, Booking, Slot, CourtSport
-- No shared state — safe for concurrent requests
+- Tenant context comes from the authenticated **JWT** (`tenantId` claim), read via
+  `@CurrentUser('tenantId')`
+- Each service applies `tenantId` as an **explicit filter** on its queries (Venue, Court, Booking,
+  CourtSport, …)
+- A cross-tenant request returns `404`/`403` — a user can only reach their own tenant's data
 
 ### New Dependencies
 
@@ -110,6 +118,19 @@ SELECT status, "trialEndsAt" FROM subscriptions;
 **Input:** Try to onboard with a slug that's already taken
 **Expected Output:** "✗ Already taken" (red text), Next button stays disabled
 **Why:** User gets immediate feedback without submitting form
+
+## Verification Process
+
+### Backend
+
+- [x] `pnpm type-check`, `pnpm lint`, `pnpm build` pass
+- [x] `pnpm test` (unit) + `pnpm --filter @bookmyturf/api test:e2e` pass
+- [x] Endpoints exercised against the running API (onboard, slug check, get/update/deactivate)
+
+### UI
+
+- [x] `pnpm --filter @bookmyturf/web test` (Vitest) passes; build clean
+- [x] Onboarding wizard verified in the browser (desktop + mobile widths)
 
 ## Documentation
 

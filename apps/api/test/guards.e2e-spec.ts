@@ -1,119 +1,56 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
-import { ConfigModule } from '@nestjs/config';
-import { JwtModule, JwtService } from '@nestjs/jwt';
-import { PassportModule } from '@nestjs/passport';
-import { Test } from '@nestjs/testing';
-import { JwtAuthGuard } from '../src/common/guards/auth.guard';
-import { RolesGuard } from '../src/common/guards/roles.guard';
-import { TransformInterceptor } from '../src/common/interceptors/transform.interceptor';
-import { JwtStrategy } from '../src/modules/auth/strategies/jwt.strategy';
-import { AuthController } from '../src/modules/auth/auth.controller';
-import { AuthService } from '../src/modules/auth/auth.service';
-import { OtpService } from '../src/modules/auth/otp/otp.service';
-import { OTP_PROVIDER } from '../src/modules/auth/otp/otp-provider.interface';
-import { PrismaService } from '../src/prisma/prisma.service';
-import { RedisService } from '../src/redis/redis.service';
-import appConfig from '../src/config/app.config';
+import { E2EContext, TEST_JWT_SECRET, closeE2EApp, createE2EApp, truncateAll } from './support/e2e';
+import { createUser } from './support/seed';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const request = require('supertest');
 
-describe('Guards (e2e)', () => {
-  let app: INestApplication;
-  let jwtService: JwtService;
-  let prisma: Record<string, any>;
+/**
+ * REAL-DB e2e for the auth guards (JwtAuthGuard + @Public).
+ * Uses the real `/v1/auth/me` (DB-backed) as the protected route and a real user.
+ */
+describe('Guards (e2e — real DB)', () => {
+  let ctx: E2EContext;
 
   beforeAll(async () => {
-    prisma = {
-      user: {
-        findUnique: jest.fn(),
-        create: jest.fn(),
-        update: jest.fn(),
-      },
-    };
-
-    const module = await Test.createTestingModule({
-      imports: [
-        ConfigModule.forRoot({ isGlobal: true, load: [appConfig] }),
-        PassportModule.register({ defaultStrategy: 'jwt' }),
-        JwtModule.register({}),
-      ],
-      controllers: [AuthController],
-      providers: [
-        AuthService,
-        OtpService,
-        JwtStrategy,
-        { provide: APP_GUARD, useClass: JwtAuthGuard },
-        { provide: APP_GUARD, useClass: RolesGuard },
-        {
-          provide: RedisService,
-          useValue: {
-            get: jest.fn(),
-            set: jest.fn(),
-            del: jest.fn(),
-            incr: jest.fn().mockResolvedValue(1),
-            expire: jest.fn(),
-          },
-        },
-        { provide: PrismaService, useValue: prisma },
-        { provide: OTP_PROVIDER, useValue: { sendOtp: jest.fn() } },
-      ],
-    }).compile();
-
-    app = module.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
-    app.useGlobalInterceptors(new TransformInterceptor());
-    app.setGlobalPrefix('v1');
-    await app.init();
-
-    jwtService = module.get(JwtService);
+    ctx = await createE2EApp();
   });
-
   afterAll(async () => {
-    await app.close();
+    await closeE2EApp(ctx);
+  });
+  beforeEach(async () => {
+    await truncateAll(ctx.prisma);
   });
 
   describe('JwtAuthGuard', () => {
-    it('returns 401 for missing token on protected route', () => {
-      return request(app.getHttpServer()).get('/v1/auth/me').expect(401);
+    it('returns 401 for a missing token on a protected route', async () => {
+      const res = await request(ctx.server()).get('/v1/auth/me');
+      expect(res.status).toBe(401);
     });
 
-    it('returns 401 for expired token', async () => {
-      const token = await jwtService.signAsync(
-        { sub: 'usr-1', role: 'CUSTOMER', tenantId: null },
-        { secret: 'dev-access-secret-change-in-production-32', expiresIn: '0s' },
+    it('returns 401 for an expired token', async () => {
+      const expired = ctx.jwt.sign(
+        { sub: 'u1', role: 'CUSTOMER', tenantId: null },
+        { secret: TEST_JWT_SECRET, expiresIn: '-1s' },
       );
-      // Wait for token to expire
-      await new Promise((r) => setTimeout(r, 1000));
-      return request(app.getHttpServer())
+      const res = await request(ctx.server())
         .get('/v1/auth/me')
-        .set('Authorization', `Bearer ${token}`)
-        .expect(401);
+        .set(...ctx.auth(expired));
+      expect(res.status).toBe(401);
     });
 
-    it('returns 200 for valid token on protected route', async () => {
-      const token = await jwtService.signAsync(
-        { sub: 'usr-1', role: 'CUSTOMER', tenantId: null },
-        { secret: 'dev-access-secret-change-in-production-32', expiresIn: '15m' },
-      );
-      prisma.user.findUnique.mockResolvedValue({
-        id: 'usr-1',
-        phone: '+919876543210',
-        role: 'CUSTOMER',
-        refreshToken: 'hash',
-      });
-      return request(app.getHttpServer())
+    it('returns 200 for a valid token on a protected route (real user)', async () => {
+      const user = await createUser(ctx.prisma, { firstName: 'Guarded', role: 'CUSTOMER' });
+      const token = ctx.sign({ sub: user.id, role: 'CUSTOMER', tenantId: null });
+      const res = await request(ctx.server())
         .get('/v1/auth/me')
-        .set('Authorization', `Bearer ${token}`)
-        .expect(200);
+        .set(...ctx.auth(token));
+      expect(res.status).toBe(200);
+      expect(res.body.data.id).toBe(user.id);
     });
 
-    it('allows access to @Public() routes without token', () => {
-      return request(app.getHttpServer())
-        .post('/v1/auth/otp/send')
-        .send({ phone: '+919876543210' })
-        .expect(201);
+    it('allows a @Public() route without a token', async () => {
+      const res = await request(ctx.server()).get('/v1/plans');
+      expect(res.status).toBe(200);
     });
   });
 });
