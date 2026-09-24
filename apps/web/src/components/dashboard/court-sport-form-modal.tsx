@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api-client';
+import { getErrorMessage, resolveApiErrorMessage } from '@/lib/api-error';
 import { useToast } from '@/components/ui/toast';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -127,11 +128,11 @@ export function CourtSportFormModal({
       }
       onSuccess();
     } catch (err: any) {
-      const message = err.response?.data?.message;
+      const message = getErrorMessage(err);
       if (message?.includes('already configured')) {
         toast('This sport is already configured for this court', 'error');
       } else {
-        toast(message || `Failed to ${isEdit ? 'update' : 'add'} sport`, 'error');
+        toast(resolveApiErrorMessage(err, `Failed to ${isEdit ? 'update' : 'add'} sport`), 'error');
       }
     } finally {
       setSubmitting(false);

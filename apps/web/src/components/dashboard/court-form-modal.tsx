@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api-client';
+import { resolveApiErrorMessage } from '@/lib/api-error';
 import { useToast } from '@/components/ui/toast';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -101,14 +102,10 @@ export function CourtFormModal({ open, onClose, onSuccess, venueId, court }: Cou
       }
       onSuccess();
     } catch (err: any) {
-      const message = err.response?.data?.message;
-      if (message?.includes('COURT_LIMIT_REACHED') || message?.includes('maximum')) {
-        toast('Court limit reached. Please upgrade your plan.', 'error');
-      } else if (message?.includes('SUBSCRIPTION_INACTIVE')) {
-        toast('Your subscription is inactive. Please renew.', 'error');
-      } else {
-        toast(message || `Failed to ${isEdit ? 'update' : 'create'} court`, 'error');
-      }
+      toast(
+        resolveApiErrorMessage(err, `Failed to ${isEdit ? 'update' : 'create'} court`),
+        'error',
+      );
     } finally {
       setSubmitting(false);
     }

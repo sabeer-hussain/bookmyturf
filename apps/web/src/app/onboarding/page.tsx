@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { useToast } from '@/components/ui/toast';
 import { api } from '@/lib/api-client';
+import { resolveApiErrorMessage } from '@/lib/api-error';
 import { INDIAN_STATES } from '@/lib/constants';
 import { Check, Loader2 } from 'lucide-react';
 
@@ -79,7 +80,7 @@ export default function OnboardingPage() {
         window.location.href = '/bookings';
       }, 1500);
     } catch (err: any) {
-      toast(err.response?.data?.message || 'Failed to complete setup', 'error');
+      toast(resolveApiErrorMessage(err, 'Failed to complete setup'), 'error');
     } finally {
       setIsSubmitting(false);
     }

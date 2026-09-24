@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api-client';
+import { resolveApiErrorMessage } from '@/lib/api-error';
 import { INDIAN_STATES } from '@/lib/constants';
 import { useToast } from '@/components/ui/toast';
 import { Dialog } from '@/components/ui/dialog';
@@ -123,14 +124,10 @@ export function VenueFormModal({ open, onClose, onSuccess, venue }: VenueFormMod
       }
       onSuccess();
     } catch (err: any) {
-      const message = err.response?.data?.message;
-      if (message?.includes('VENUE_LIMIT_REACHED') || message?.includes('maximum')) {
-        toast('Venue limit reached. Please upgrade your plan.', 'error');
-      } else if (message?.includes('SUBSCRIPTION_INACTIVE')) {
-        toast('Your subscription is inactive. Please renew.', 'error');
-      } else {
-        toast(message || `Failed to ${isEdit ? 'update' : 'create'} venue`, 'error');
-      }
+      toast(
+        resolveApiErrorMessage(err, `Failed to ${isEdit ? 'update' : 'create'} venue`),
+        'error',
+      );
     } finally {
       setSubmitting(false);
     }
@@ -201,13 +198,14 @@ export function VenueFormModal({ open, onClose, onSuccess, venue }: VenueFormMod
         {/* Pincode + Phone */}
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <Label htmlFor="venue-pincode">Pincode</Label>
+            <Label htmlFor="venue-pincode">Pincode *</Label>
             <Input
               id="venue-pincode"
               value={form.pincode}
               onChange={(e) => updateField('pincode', e.target.value)}
               placeholder="e.g., 400058"
               pattern="\d{6}"
+              title="Pincode must be a 6-digit number"
               maxLength={6}
             />
           </div>

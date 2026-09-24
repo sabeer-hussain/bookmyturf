@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api-client';
+import { resolveApiErrorMessage } from '@/lib/api-error';
 import { useToast } from '@/components/ui/toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -90,7 +91,7 @@ export default function VenueDetailPage() {
       setDeleteCourt(null);
       fetchData();
     } catch (err: any) {
-      toast(err.response?.data?.message || 'Failed to deactivate court', 'error');
+      toast(resolveApiErrorMessage(err, 'Failed to deactivate court'), 'error');
     } finally {
       setDeleting(false);
     }

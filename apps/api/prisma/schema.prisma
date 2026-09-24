@@ -182,8 +182,8 @@ model Venue {
   openTime    String
   closeTime   String
   isActive    Boolean  @default(true)
-  amenities   Json?
-  images      Json?
+  amenities   String[] @default([])
+  images      String[] @default([])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -204,7 +204,7 @@ model Court {
   surfaceType   String?
   dimensions    String?
   maxPlayers    Int?
-  images        Json?
+  images        String[]     @default([])
   isActive      Boolean      @default(true)
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt

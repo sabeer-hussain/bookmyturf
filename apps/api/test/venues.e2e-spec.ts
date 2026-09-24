@@ -61,6 +61,11 @@ describe('Venues (e2e — real DB)', () => {
         .set(...ctx.auth(token))
         .send({});
       expect(res.status).toBe(400);
+      // Validation errors are normalized to the VALIDATION_ERROR envelope with field details.
+      expect(res.body.success).toBe(false);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(Array.isArray(res.body.error.details)).toBe(true);
+      expect(res.body.error.details.length).toBeGreaterThan(0);
     });
 
     it('rejects invalid pincode (400)', async () => {
@@ -110,7 +115,7 @@ describe('Venues (e2e — real DB)', () => {
         .set(...ctx.auth(token))
         .send(validVenue);
       expect(res.status).toBe(403);
-      expect(res.body.code ?? res.body.error?.code).toBe('VENUE_LIMIT_REACHED');
+      expect(res.body.error.code).toBe('VENUE_LIMIT_REACHED');
       expect(await ctx.prisma.venue.count({ where: { tenantId: tenant.id } })).toBe(1);
     });
 

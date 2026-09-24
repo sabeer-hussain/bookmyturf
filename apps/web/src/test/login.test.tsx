@@ -76,7 +76,12 @@ describe('Login Page', () => {
 
   it('shows error on OTP send failure', async () => {
     (api.post as ReturnType<typeof vi.fn>).mockRejectedValueOnce({
-      response: { data: { message: 'Rate limit exceeded' } },
+      response: {
+        data: {
+          success: false,
+          error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Rate limit exceeded' },
+        },
+      },
     });
     renderLogin();
     await waitFor(() => screen.getByPlaceholderText('9876543210'));

@@ -6,7 +6,7 @@ import { anySport, createCourt, createTenant, createUser, createVenue } from './
 const request = require('supertest');
 
 /**
- * REAL-DATABASE end-to-end tests for the slot-configuration feature (issue #31).
+ * REAL-DATABASE end-to-end tests for the slot-configuration feature.
  *
  * Uses the shared real-DB harness (`test/support/e2e.ts`): boots the full AppModule against
  * the dedicated test database and exercises the complete stack
@@ -159,7 +159,13 @@ describe('Slot Configuration — real DB (integration)', () => {
           ],
         })
         .expect(409)
-        .expect((res: any) => expect(res.body.code).toBe('SLOT_OVERLAP'));
+        .expect((res: any) => {
+          // Business exceptions keep their specific code inside the error envelope; no details.
+          expect(res.body.success).toBe(false);
+          expect(res.body.error.code).toBe('SLOT_OVERLAP');
+          expect(typeof res.body.error.message).toBe('string');
+          expect(res.body.error.details).toBeUndefined();
+        });
       const count = await ctx.prisma.slotConfig.count({ where: { courtSportId: courtSportAId } });
       expect(count).toBe(0);
     });
@@ -179,7 +185,7 @@ describe('Slot Configuration — real DB (integration)', () => {
         .set(...auth(ownerA))
         .send({ dayOfWeek: 'MONDAY', startTime: '06:30', endTime: '07:30' })
         .expect(409)
-        .expect((res: any) => expect(res.body.code).toBe('SLOT_OVERLAP'));
+        .expect((res: any) => expect(res.body.error.code).toBe('SLOT_OVERLAP'));
       expect(await ctx.prisma.slotConfig.count({ where: { courtSportId: courtSportAId } })).toBe(1);
     });
 
@@ -189,7 +195,7 @@ describe('Slot Configuration — real DB (integration)', () => {
         .set(...auth(ownerA))
         .send({ dayOfWeek: 'MONDAY', startTime: '06:00', endTime: '06:45' })
         .expect(400)
-        .expect((res: any) => expect(res.body.code).toBe('SLOT_NOT_ALIGNED'));
+        .expect((res: any) => expect(res.body.error.code).toBe('SLOT_NOT_ALIGNED'));
     });
 
     it('rejects slot outside venue operating hours (400, SLOT_OUTSIDE_OPERATING_HOURS)', async () => {
@@ -198,7 +204,7 @@ describe('Slot Configuration — real DB (integration)', () => {
         .set(...auth(ownerA))
         .send({ dayOfWeek: 'MONDAY', startTime: '05:00', endTime: '06:00' })
         .expect(400)
-        .expect((res: any) => expect(res.body.code).toBe('SLOT_OUTSIDE_OPERATING_HOURS'));
+        .expect((res: any) => expect(res.body.error.code).toBe('SLOT_OUTSIDE_OPERATING_HOURS'));
     });
   });
 

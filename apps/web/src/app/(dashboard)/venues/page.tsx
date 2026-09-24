@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api-client';
+import { resolveApiErrorMessage } from '@/lib/api-error';
 import { useToast } from '@/components/ui/toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -76,7 +77,7 @@ export default function VenuesPage() {
       setDeleteVenue(null);
       fetchVenues();
     } catch (err: any) {
-      toast(err.response?.data?.message || 'Failed to deactivate venue', 'error');
+      toast(resolveApiErrorMessage(err, 'Failed to deactivate venue'), 'error');
     } finally {
       setDeleting(false);
     }

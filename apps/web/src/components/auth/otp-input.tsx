@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Loader2 } from 'lucide-react';
+import { resolveApiErrorMessage } from '@/lib/api-error';
 
 interface OtpInputProps {
   phone: string;
@@ -55,7 +56,7 @@ export function OtpInput({ phone, onSubmit, onResend, onBack }: OtpInputProps) {
     try {
       await onSubmit(code);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Invalid OTP');
+      setError(resolveApiErrorMessage(err, 'Invalid OTP'));
       setOtp(Array(6).fill(''));
       inputRefs.current[0]?.focus();
     } finally {

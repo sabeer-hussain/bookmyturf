@@ -121,6 +121,20 @@ describe('Auth (e2e — real DB + Redis)', () => {
       expect(sixth.status).toBe(400); // "Maximum OTP attempts exceeded"
       await cleanOtp(phone);
     });
+
+    it('enforces the send rate limit (429 RATE_LIMIT_EXCEEDED envelope)', async () => {
+      const phone = nextPhone();
+      await cleanOtp(phone);
+      // Send allows 3 requests / 10 min; the 4th is blocked with 429.
+      await request(ctx.server()).post('/v1/auth/otp/send').send({ phone }).expect(201);
+      await request(ctx.server()).post('/v1/auth/otp/send').send({ phone }).expect(201);
+      await request(ctx.server()).post('/v1/auth/otp/send').send({ phone }).expect(201);
+      const fourth = await request(ctx.server()).post('/v1/auth/otp/send').send({ phone });
+      expect(fourth.status).toBe(429);
+      expect(fourth.body.success).toBe(false);
+      expect(fourth.body.error.code).toBe('RATE_LIMIT_EXCEEDED');
+      await cleanOtp(phone);
+    });
   });
 
   describe('POST /v1/auth/refresh', () => {

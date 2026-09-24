@@ -79,7 +79,7 @@ describe('Courts & Sports (e2e — real DB)', () => {
         .set(...ctx.auth(token))
         .send({ name: 'Court 2' });
       expect(res.status).toBe(403);
-      expect(res.body.code ?? res.body.error?.code).toBe('COURT_LIMIT_REACHED');
+      expect(res.body.error.code).toBe('COURT_LIMIT_REACHED');
       expect(await ctx.prisma.court.count({ where: { venue: { tenantId: tenant.id } } })).toBe(1);
     });
 
@@ -125,6 +125,10 @@ describe('Courts & Sports (e2e — real DB)', () => {
         .get('/v1/courts/nope')
         .set(...ctx.auth(token));
       expect(res.status).toBe(404);
+      // Status-derived code for a code-less NotFoundException, in the error envelope.
+      expect(res.body.success).toBe(false);
+      expect(res.body.error.code).toBe('NOT_FOUND');
+      expect(res.body.error.details).toBeUndefined();
     });
   });
 

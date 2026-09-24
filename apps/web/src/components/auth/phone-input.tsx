@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Loader2 } from 'lucide-react';
+import { resolveApiErrorMessage } from '@/lib/api-error';
 
 interface PhoneInputProps {
   onSubmit: (phone: string) => Promise<void>;
@@ -29,7 +30,7 @@ export function PhoneInput({ onSubmit }: PhoneInputProps) {
     try {
       await onSubmit(fullPhone);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to send OTP');
+      setError(resolveApiErrorMessage(err, 'Failed to send OTP'));
     } finally {
       setIsLoading(false);
     }

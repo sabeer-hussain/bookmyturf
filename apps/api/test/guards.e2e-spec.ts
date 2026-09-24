@@ -25,6 +25,11 @@ describe('Guards (e2e — real DB)', () => {
     it('returns 401 for a missing token on a protected route', async () => {
       const res = await request(ctx.server()).get('/v1/auth/me');
       expect(res.status).toBe(401);
+      // 401s are normalized to the error envelope with a status-derived code.
+      expect(res.body.success).toBe(false);
+      expect(res.body.error.code).toBe('UNAUTHORIZED');
+      expect(typeof res.body.error.message).toBe('string');
+      expect(res.body.error.details).toBeUndefined();
     });
 
     it('returns 401 for an expired token', async () => {

@@ -147,8 +147,8 @@ Table venues {
   open_time varchar [not null]
   close_time varchar [not null]
   is_active boolean [default: true]
-  amenities json
-  images json
+  amenities "text[]"
+  images "text[]"
   created_at timestamp [default: `now()`]
   updated_at timestamp
 
@@ -167,7 +167,7 @@ Table courts {
   surface_type varchar
   dimensions varchar
   max_players int
-  images json
+  images "text[]"
   is_active boolean [default: true]
   created_at timestamp [default: `now()`]
   updated_at timestamp

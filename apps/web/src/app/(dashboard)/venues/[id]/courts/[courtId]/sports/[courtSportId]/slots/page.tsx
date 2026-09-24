@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { generateSlots } from '@bookmyturf/shared';
 import { api } from '@/lib/api-client';
+import { resolveApiErrorMessage } from '@/lib/api-error';
 import { useToast } from '@/components/ui/toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -96,7 +97,7 @@ export default function SlotConfigPage() {
       });
       setConfigs((prev) => [...prev, res.data.data]);
     } catch (err: any) {
-      toast(err.response?.data?.message || 'Failed to add slot', 'error');
+      toast(resolveApiErrorMessage(err, 'Failed to add slot'), 'error');
     }
   };
 
@@ -112,7 +113,7 @@ export default function SlotConfigPage() {
       setConfigs((prev) =>
         prev.map((c) => (c.id === config.id ? { ...c, isPeakHour: config.isPeakHour } : c)),
       );
-      toast(err.response?.data?.message || 'Failed to update slot', 'error');
+      toast(resolveApiErrorMessage(err, 'Failed to update slot'), 'error');
     }
   };
 
@@ -125,7 +126,7 @@ export default function SlotConfigPage() {
       toast('Slot removed', 'success');
       setRemoveTarget(null);
     } catch (err: any) {
-      toast(err.response?.data?.message || 'Failed to remove slot', 'error');
+      toast(resolveApiErrorMessage(err, 'Failed to remove slot'), 'error');
     } finally {
       setRemoving(false);
     }
@@ -177,7 +178,7 @@ export default function SlotConfigPage() {
       setConfigs((prev) => [...prev, ...res.data.data]);
       toast(`Generated ${res.data.data.length} slots`, 'success');
     } catch (err: any) {
-      toast(err.response?.data?.message || 'Failed to auto-generate slots', 'error');
+      toast(resolveApiErrorMessage(err, 'Failed to auto-generate slots'), 'error');
     } finally {
       setGenerating(false);
       setShowGenerateConfirm(false);

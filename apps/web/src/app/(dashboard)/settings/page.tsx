@@ -12,6 +12,7 @@ import { useToast } from '@/components/ui/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { useTenant } from '@/contexts/tenant-context';
 import { api } from '@/lib/api-client';
+import { resolveApiErrorMessage } from '@/lib/api-error';
 import { Loader2, Upload } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -76,7 +77,7 @@ export default function SettingsPage() {
       await refetchUser();
       setIsEditing(false);
     } catch (err: any) {
-      toast(err.response?.data?.message || 'Failed to update', 'error');
+      toast(resolveApiErrorMessage(err, 'Failed to update'), 'error');
     } finally {
       setIsSaving(false);
     }
